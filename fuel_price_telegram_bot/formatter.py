@@ -77,10 +77,18 @@ def format_help_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
 
 
 def format_start_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
+    aliases = '|'.join(get_supported_aliases())
+    provider_commands = ' '.join(f'/{provider}' for provider in enabled_providers)
     enabled_names = ', '.join(get_brand_name(provider) for provider in enabled_providers)
     return (
-        f'Hello! I can fetch fuel prices from {enabled_names}.\n'
-        'Use /fuel for all prices, /best for cheapest by fuel, and /price <fuel> for a single fuel type.'
+        'Available commands:\n'
+        '/fuel - show combined fuel price comparison\n\n'
+        f'/fuel <{aliases}> - cheapest for type (alias of /price)\n\n'
+        f'/price <{aliases}> - cheapest across enabled brands\n\n'
+        '/best - cheapest provider for each fuel type\n\n'
+        f'{provider_commands} - show one provider only\n\n'
+        '/ping - check bot is alive\n\n'
+        f'Enabled providers: {enabled_names}.\n\n'
     )
 
 
