@@ -1,0 +1,41 @@
+name: Release Lambda Zip
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build Lambda package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          rm -rf .build_lambda lambda-deployment.zip
+          mkdir -p .build_lambda
+          python -m pip install -r requirements.txt -t .build_lambda
+          cp lambda_function.py .build_lambda/
+          cp -r fuel_price_telegram_bot .build_lambda/
+          cd .build_lambda
+          zip -r ../lambda-deployment.zip .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: lambda-deployment.zip
+          generate_release_notes: true
