@@ -43,7 +43,7 @@ _BRAND_NAMES = {
     'virsi': 'Virsi',
     'viada': 'Viada',
 }
-_CACHE_TTL_SECONDS = 90
+_CACHE_TTL_SECONDS = 1800
 _REQUEST_TIMEOUT = (2, 4)
 _MAX_SCRAPE_WORKERS = 4
 

@@ -93,6 +93,11 @@ Returns cache state, enabled providers, last refresh attempt, last successful re
 
 Forces data cache refresh and returns updated comparison output.
 
+Notes:
+
+- The command uses a short cooldown to prevent repeated refresh spam in busy chats.
+- Typical cooldown is per-chat and global, so very frequent repeated taps may return a short wait message.
+
 ### `/mode <compact|full|auto>`
 
 Sets per-chat display mode.
@@ -123,6 +128,7 @@ Examples:
 - `Fuel Menu` opens a dynamic fuel list based on currently scraped data.
 - Selecting a fuel opens a second inline menu with actions: best price for that fuel, all providers for that fuel, or provider-specific view.
 - Fuel menu entries are sorted in a stable fuel order and can show favorite fuels first.
+- Cache TTL is tuned for hourly provider updates, reducing unnecessary upstream scraping.
 
 ## Error and Fallback Behavior
 

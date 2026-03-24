@@ -1,5 +1,6 @@
 import logging
 import re
+from datetime import datetime, timedelta
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 from .config import Config
@@ -20,8 +21,12 @@ from .formatter import (
 logger = logging.getLogger(__name__)
 _CB_PREFIX = 'act:'
 _CHAT_PREFS_KEY = 'chat_preferences'
+_REFRESH_BY_CHAT_KEY = 'refresh_last_by_chat'
+_REFRESH_GLOBAL_KEY = 'refresh_last_global'
 _MODE_COMPACT = 'compact'
 _MODE_FULL = 'full'
+_REFRESH_CHAT_COOLDOWN_SECONDS = 45
+_REFRESH_GLOBAL_COOLDOWN_SECONDS = 20
 _FUEL_ORDER = {
     '95': 0,
     '95 Premium': 1,
@@ -260,7 +265,59 @@ def _set_mode(context: ContextTypes.DEFAULT_TYPE, chat_id: int | None, mode: str
         pref['mode'] = mode
 
 
+def _get_refresh_tracker_by_chat(context: ContextTypes.DEFAULT_TYPE) -> dict[int, datetime]:
+    return context.bot_data.setdefault(_REFRESH_BY_CHAT_KEY, {})
+
+
+def _get_refresh_tracker_global(context: ContextTypes.DEFAULT_TYPE) -> datetime | None:
+    value = context.bot_data.get(_REFRESH_GLOBAL_KEY)
+    return value if isinstance(value, datetime) else None
+
+
+def _set_refresh_tracker(context: ContextTypes.DEFAULT_TYPE, chat_id: int | None, now: datetime) -> None:
+    if chat_id is not None:
+        _get_refresh_tracker_by_chat(context)[chat_id] = now
+    context.bot_data[_REFRESH_GLOBAL_KEY] = now
+
+
+def _remaining_seconds(last_run: datetime | None, cooldown: int, now: datetime) -> int:
+    if last_run is None:
+        return 0
+
+    remaining = int((last_run + timedelta(seconds=cooldown) - now).total_seconds())
+    return remaining if remaining > 0 else 0
+
+
+def _refresh_cooldown_message(chat_remaining: int, global_remaining: int) -> str | None:
+    if chat_remaining <= 0 and global_remaining <= 0:
+        return None
+
+    if chat_remaining > 0 and global_remaining > 0:
+        wait_seconds = max(chat_remaining, global_remaining)
+        return f'⏱️ Refresh is cooling down. Try again in about {wait_seconds}s.'
+
+    if chat_remaining > 0:
+        return f'⏱️ This chat refreshed recently. Try again in about {chat_remaining}s.'
+
+    return f'⏱️ Refresh is temporarily busy. Try again in about {global_remaining}s.'
+
+
 async def _run_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE, from_callback: bool = False) -> None:
+    now = datetime.utcnow()
+    chat_id = _get_chat_id(update)
+    by_chat = _get_refresh_tracker_by_chat(context)
+    chat_remaining = _remaining_seconds(by_chat.get(chat_id), _REFRESH_CHAT_COOLDOWN_SECONDS, now)
+    global_remaining = _remaining_seconds(_get_refresh_tracker_global(context), _REFRESH_GLOBAL_COOLDOWN_SECONDS, now)
+    cooldown_message = _refresh_cooldown_message(chat_remaining, global_remaining)
+    if cooldown_message:
+        if from_callback:
+            await _edit_callback_html(update, cooldown_message, reply_markup=_shortcuts_markup())
+        else:
+            await _reply_text(update, cooldown_message, shortcuts=True)
+        return
+
+    _set_refresh_tracker(context, chat_id, now)
+
     config = _get_config(context)
     refresh_result = refresh_fuel_prices(
         config.TARGET_URL,
