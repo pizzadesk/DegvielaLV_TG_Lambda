@@ -151,6 +151,7 @@ def _shortcuts_markup() -> InlineKeyboardMarkup:
                 InlineKeyboardButton('Diesel', callback_data=f'{_CB_PREFIX}fuelbest:diesel'),
             ],
             [
+                InlineKeyboardButton('❓ Help', callback_data=f'{_CB_PREFIX}help'),
                 InlineKeyboardButton('🔄 Refresh', callback_data=f'{_CB_PREFIX}refresh'),
                 InlineKeyboardButton('📊 Status', callback_data=f'{_CB_PREFIX}status'),
             ],
@@ -233,6 +234,14 @@ async def _edit_callback_html(update: Update, text: str, reply_markup: InlineKey
         await _reply_html(update, text, shortcuts=True)
         return
     await query.edit_message_text(text=text, parse_mode='HTML', disable_web_page_preview=True, reply_markup=reply_markup)
+
+
+async def _edit_callback_text(update: Update, text: str, reply_markup: InlineKeyboardMarkup | None = None) -> None:
+    query = update.callback_query
+    if query is None:
+        await _reply_text(update, text, shortcuts=True)
+        return
+    await query.edit_message_text(text=text, disable_web_page_preview=True, reply_markup=reply_markup)
 
 
 def _extract_fuel_row(data: list[dict], fuel: str) -> dict | None:
@@ -641,6 +650,10 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if action == f'{_CB_PREFIX}best':
         await _edit_callback_html(update, format_best_prices(_get_data(context), config.ENABLED_PROVIDERS), reply_markup=_shortcuts_markup())
+        return
+
+    if action == f'{_CB_PREFIX}help':
+        await _edit_callback_text(update, format_help_text(config.ENABLED_PROVIDERS), reply_markup=_shortcuts_markup())
         return
 
     if action == f'{_CB_PREFIX}status':
