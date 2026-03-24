@@ -2,7 +2,7 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from .config import Config
-from .scraper import get_fuel_prices, get_scrape_status
+from .scraper import get_fuel_prices, get_scrape_status, refresh_fuel_prices
 from .formatter import (
     format_best_prices,
     format_help_text,
@@ -113,9 +113,17 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config = _get_config(context)
-    data = _get_data(context, force_refresh=True)
+    refresh_result = refresh_fuel_prices(
+        config.TARGET_URL,
+        enabled_sources=config.ENABLED_PROVIDERS,
+    )
+    data = refresh_result.data
 
-    if not data:
+    if not refresh_result.refreshed:
+        if data:
+            text = format_message(data, config.ENABLED_PROVIDERS)
+            await _reply_html(update, '⚠️ Could not refresh fuel prices; showing cached data.\n\n' + text)
+            return
         await update.message.reply_text('⚠️ Could not refresh fuel prices; please try again.')
         return
 

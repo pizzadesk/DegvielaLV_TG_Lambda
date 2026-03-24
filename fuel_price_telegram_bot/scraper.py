@@ -1,5 +1,6 @@
 import re
 import logging
+from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 
@@ -45,9 +46,19 @@ _BRAND_NAMES = {
 _CACHE_TTL_SECONDS = 90
 _REQUEST_TIMEOUT = (2, 4)
 _MAX_SCRAPE_WORKERS = 4
+
+
+@dataclass(frozen=True)
+class RefreshResult:
+    data: list[dict]
+    refreshed: bool
+
+
 _cached_data: list[dict] | None = None
 _cache_expires_at: datetime = datetime.fromtimestamp(0)
 _last_refresh_at: datetime | None = None
+_last_refresh_attempt_at: datetime | None = None
+_last_refresh_error: str | None = None
 _last_source_status: dict[str, dict] = {
     source: {
         'enabled': True,
@@ -323,32 +334,57 @@ def scrape_fuel_prices(
         return []
 
 
+def refresh_fuel_prices(
+    url: str,
+    enabled_sources: tuple[str, ...] | list[str] | None = None,
+) -> RefreshResult:
+    global _cached_data, _cache_expires_at, _last_refresh_at, _last_refresh_attempt_at, _last_refresh_error
+
+    now = datetime.utcnow()
+    _last_refresh_attempt_at = now
+
+    logger.info('Refreshing fuel prices from source')
+    fresh_data = scrape_fuel_prices(url, enabled_sources=enabled_sources)
+    if fresh_data:
+        _cached_data = fresh_data
+        _last_refresh_at = now
+        _last_refresh_error = None
+        _cache_expires_at = now + timedelta(seconds=_CACHE_TTL_SECONDS)
+        return RefreshResult(data=_cached_data, refreshed=True)
+
+    _last_refresh_error = 'Refresh failed; keeping last known good cache'
+    logger.warning(_last_refresh_error)
+
+    if _cached_data is not None:
+        return RefreshResult(data=_cached_data, refreshed=False)
+
+    _cache_expires_at = datetime.fromtimestamp(0)
+    return RefreshResult(data=[], refreshed=False)
+
+
 def get_fuel_prices(
     url: str,
     force_refresh: bool = False,
     enabled_sources: tuple[str, ...] | list[str] | None = None,
 ) -> list[dict]:
     """Return cached fuel prices for a small TTL, refresh from source if expired."""
-    global _cached_data, _cache_expires_at, _last_refresh_at
+    global _cached_data, _cache_expires_at
 
     now = datetime.utcnow()
     if not force_refresh and _cached_data is not None and now < _cache_expires_at:
         logger.debug('Using cached fuel prices (expires at %s)', _cache_expires_at)
         return _cached_data
 
-    logger.info('Refreshing fuel prices from source')
-    fresh_data = scrape_fuel_prices(url, enabled_sources=enabled_sources)
-    _cached_data = fresh_data
-    _last_refresh_at = now
-    _cache_expires_at = now + timedelta(seconds=_CACHE_TTL_SECONDS)
-    return _cached_data
+    return refresh_fuel_prices(url, enabled_sources=enabled_sources).data
 
 
 def get_scrape_status(enabled_sources: tuple[str, ...] | list[str] | None = None) -> dict:
     active_sources = get_enabled_sources(enabled_sources)
     return {
         'cache_ttl_seconds': _CACHE_TTL_SECONDS,
+        'last_refresh_attempt_at': _last_refresh_attempt_at,
         'last_refresh_at': _last_refresh_at,
+        'last_refresh_error': _last_refresh_error,
         'cache_expires_at': _cache_expires_at if _cached_data is not None else None,
         'enabled_sources': active_sources,
         'sources': {

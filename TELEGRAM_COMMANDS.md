@@ -87,7 +87,7 @@ Returns only Viada prices.
 
 ### `/status`
 
-Returns cache state, enabled providers, and last scrape result per provider.
+Returns cache state, enabled providers, last refresh attempt, last successful refresh, the latest refresh issue if any, and last scrape result per provider.
 
 ### `/refresh`
 

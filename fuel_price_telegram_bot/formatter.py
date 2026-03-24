@@ -229,16 +229,21 @@ def format_provider_prices(data: list[dict], provider: str) -> str:
 
 def format_status(status: dict) -> str:
     enabled_sources = status.get('enabled_sources', [])
+    last_refresh_attempt_at = status.get('last_refresh_attempt_at')
     last_refresh_at = status.get('last_refresh_at')
+    last_refresh_error = status.get('last_refresh_error')
     cache_expires_at = status.get('cache_expires_at')
     ttl_seconds = status.get('cache_ttl_seconds')
 
     message = '📊 <b>Bot Status</b>\n\n'
     message += f"Enabled providers: {', '.join(get_brand_name(provider) for provider in enabled_sources)}\n"
     message += f"Cache TTL: {ttl_seconds}s\n"
+    message += f"Last refresh attempt: {_format_display_time(last_refresh_attempt_at)}\n"
     message += f"Last refresh: {_format_display_time(last_refresh_at)}\n"
     message += 'Cache expires: '
     message += _format_display_time(cache_expires_at) if cache_expires_at else 'no cache yet'
+    if last_refresh_error:
+        message += f"\nLast refresh issue: {last_refresh_error}"
     message += '\n\n'
 
     for source, source_status in status.get('sources', {}).items():
