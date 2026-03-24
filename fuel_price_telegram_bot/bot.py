@@ -29,14 +29,47 @@ def _get_data(context: ContextTypes.DEFAULT_TYPE, force_refresh: bool = False) -
     )
 
 
+def _get_reply_message(update: Update):
+    message = update.effective_message
+    if message is None:
+        logger.warning('Skipping reply for update without effective_message: %s', update.update_id)
+    return message
+
+
+async def _reply_text(update: Update, text: str) -> None:
+    message = _get_reply_message(update)
+    if message is None:
+        return
+    await message.reply_text(text)
+
+
 async def _reply_html(update: Update, text: str) -> None:
-    await update.message.reply_html(text, disable_web_page_preview=True)
+    message = _get_reply_message(update)
+    if message is None:
+        return
+    await message.reply_html(text, disable_web_page_preview=True)
+
+
+async def _handle_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error('Telegram handler error', exc_info=context.error)
+
+    if not isinstance(update, Update):
+        return
+
+    message = update.effective_message
+    if message is None:
+        return
+
+    try:
+        await message.reply_text('⚠️ An internal error occurred. Please try again later.')
+    except Exception:
+        logger.exception('Failed to send error notification')
 
 
 async def _provider_command(update: Update, context: ContextTypes.DEFAULT_TYPE, provider: str) -> None:
     config = _get_config(context)
     if provider not in config.ENABLED_PROVIDERS:
-        await update.message.reply_text(f'{provider} is currently disabled in this deployment.')
+        await _reply_text(update, f'{provider} is currently disabled in this deployment.')
         return
 
     text = format_provider_prices(_get_data(context), provider)
@@ -45,16 +78,16 @@ async def _provider_command(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config = _get_config(context)
-    await update.message.reply_text(format_start_text(config.ENABLED_PROVIDERS))
+    await _reply_text(update, format_start_text(config.ENABLED_PROVIDERS))
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config = _get_config(context)
-    await update.message.reply_text(format_help_text(config.ENABLED_PROVIDERS))
+    await _reply_text(update, format_help_text(config.ENABLED_PROVIDERS))
 
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("pong")
+    await _reply_text(update, 'pong')
 
 
 async def fuel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -74,7 +107,7 @@ async def fuel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args
     if not args:
-        await update.message.reply_text('Usage: /price <95|95+|98|diesel|diesel+|xtl|gas|lpg|cng|e85>')
+        await _reply_text(update, 'Usage: /price <95|95+|98|diesel|diesel+|xtl|gas|lpg|cng|e85>')
         return
 
     config = _get_config(context)
@@ -124,7 +157,7 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             text = format_message(data, config.ENABLED_PROVIDERS)
             await _reply_html(update, '⚠️ Could not refresh fuel prices; showing cached data.\n\n' + text)
             return
-        await update.message.reply_text('⚠️ Could not refresh fuel prices; please try again.')
+        await _reply_text(update, '⚠️ Could not refresh fuel prices; please try again.')
         return
 
     text = format_message(data, config.ENABLED_PROVIDERS)
@@ -150,6 +183,7 @@ def create_application(config: Config | None = None) -> Application:
     app.add_handler(CommandHandler('viada', viada))
     app.add_handler(CommandHandler('status', status))
     app.add_handler(CommandHandler('refresh', refresh))
+    app.add_error_handler(_handle_error)
 
     return app
 
