@@ -93,16 +93,42 @@ Returns cache state, enabled providers, last refresh attempt, last successful re
 
 Forces data cache refresh and returns updated comparison output.
 
+Notes:
+
+- The command uses a short cooldown to prevent repeated refresh spam in busy chats.
+- Typical cooldown is per-chat and global, so very frequent repeated taps may return a short wait message.
+
+### `/mode <compact|full|auto>`
+
+Sets per-chat display mode.
+
+- `compact`: concise fuel output
+- `full`: full comparison output
+- `auto`: group/channel -> compact, private chat -> full
+
+### `/fav <add|remove|list|clear> <fuel>`
+
+Manages per-chat favorite fuels used in the inline Fuel Menu.
+
+Examples:
+
+```text
+/fav add diesel
+/fav list
+```
+
 ## Output Notes
 
 - Prices are scraped from provider websites and normalized into shared fuel categories.
 - If a provider does not publish a specific fuel type, it is omitted for that fuel row.
 - Provider-specific commands honor the `ENABLED_PROVIDERS` configuration.
 - Messages include source attribution and support credit.
-- Main responses include inline shortcut buttons for quick actions (`Fuel Menu`, `Best`, `95`, `Diesel`, `Refresh`, `Status`).
+- Main responses include inline shortcut buttons for quick actions (`Fuel Menu`, `Best`, `95`, `Diesel`, `Help`, `Refresh`, `Status`).
 - In groups and channels, `/fuel` without arguments returns a compact snapshot by default to reduce chat noise.
 - `Fuel Menu` opens a dynamic fuel list based on currently scraped data.
 - Selecting a fuel opens a second inline menu with actions: best price for that fuel, all providers for that fuel, or provider-specific view.
+- Fuel menu entries are sorted in a stable fuel order and can show favorite fuels first.
+- Cache TTL is tuned for hourly provider updates, reducing unnecessary upstream scraping.
 
 ## Error and Fallback Behavior
 
