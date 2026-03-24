@@ -2,6 +2,7 @@ import logging
 import re
 from datetime import datetime, timedelta
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import BadRequest
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 from .config import Config
 from .scraper import get_fuel_prices, get_scrape_status, refresh_fuel_prices
@@ -238,7 +239,11 @@ async def _edit_callback_html(update: Update, text: str, reply_markup: InlineKey
     if query is None:
         await _reply_html(update, text, shortcuts=True)
         return
-    await query.edit_message_text(text=text, parse_mode='HTML', disable_web_page_preview=True, reply_markup=reply_markup)
+    try:
+        await query.edit_message_text(text=text, parse_mode='HTML', disable_web_page_preview=True, reply_markup=reply_markup)
+    except BadRequest as exc:
+        if 'message is not modified' not in str(exc).lower():
+            raise
 
 
 async def _edit_callback_text(update: Update, text: str, reply_markup: InlineKeyboardMarkup | None = None) -> None:
@@ -246,7 +251,11 @@ async def _edit_callback_text(update: Update, text: str, reply_markup: InlineKey
     if query is None:
         await _reply_text(update, text, shortcuts=True)
         return
-    await query.edit_message_text(text=text, disable_web_page_preview=True, reply_markup=reply_markup)
+    try:
+        await query.edit_message_text(text=text, disable_web_page_preview=True, reply_markup=reply_markup)
+    except BadRequest as exc:
+        if 'message is not modified' not in str(exc).lower():
+            raise
 
 
 def _extract_fuel_row(data: list[dict], fuel: str) -> dict | None:
@@ -371,12 +380,28 @@ async def _handle_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     if not isinstance(update, Update):
         return
 
+    # Callback (inline button) errors: edit the existing message in-place.
+    if update.callback_query is not None:
+        try:
+            await _edit_callback_html(
+                update,
+                '⚠️ Something went wrong. Tap <b>🔄 Refresh</b> to reload data or try your action again.',
+                reply_markup=_shortcuts_markup(),
+            )
+        except Exception:
+            logger.exception('Failed to edit message for error notification')
+        return
+
+    # Command errors: send a reply with shortcuts attached.
     message = update.effective_message
     if message is None:
         return
 
     try:
-        await message.reply_text('⚠️ An internal error occurred. Please try again later.')
+        await message.reply_text(
+            '⚠️ An internal error occurred. Please try again later.',
+            reply_markup=_shortcuts_markup(),
+        )
     except Exception:
         logger.exception('Failed to send error notification')
 
