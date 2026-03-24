@@ -1,137 +1,131 @@
-# Telegram Bot Commands
+# Telegram Bot — Command Reference
 
-This file documents all currently implemented Telegram bot commands.
+Prices are scraped from **Circle K**, **Neste**, **Virsi**, and **Viada** (Latvia).
 
-## Command List
+---
 
-### `/start`
+## The fastest way to use the bot
 
-Shows a short introduction and usage hint.
+Every bot message includes a row of inline buttons — no slash commands needed:
 
-### `/help`
+| Button | What it does |
+|---|---|
+| ⛽ **Fuel Menu** | Opens a fuel list → pick one → choose Best / All providers / single provider |
+| 🏁 **Best** | Cheapest provider for every fuel type in one view |
+| **95** / **Diesel** | Cheapest price for that fuel, instantly |
+| ❓ **Help** | Shows this info inside the chat |
+| 🔄 **Refresh** | Forces a data refresh (subject to cooldown) |
+| 📊 **Status** | Shows cache health and last scrape result per provider |
 
-Shows available commands and supported fuel aliases.
+### Fuel Menu flow
 
-Supported aliases include:
-
-- `95`
-- `95+`
-- `98`
-- `diesel`
-- `diesel+`
-- `xtl`
-- `gas`
-- `lpg`
-- `cng`
-- `e85`
-
-### `/ping`
-
-Health-check command. Returns `pong`.
-
-### `/fuel`
-
-Returns a combined comparison table for all normalized fuel types across:
-
-- Circle K
-- Neste
-- Virsi
-- Viada
-
-### `/fuel <fuel_type>`
-
-Alias for `/price <fuel_type>`.
-Returns the cheapest available match across all providers.
-
-Supported aliases include:
-
-- `95`
-- `98`
-- `diesel`
-- `diesel+`
-- `xtl`
-- `gas`
-- `lpg`
-- `cng`
-- `e85`
-
-### `/price <fuel_type>`
-
-Returns the single cheapest result for the requested normalized fuel type.
-
-Example:
-
-```text
-/price diesel
+```
+⛽ Fuel Menu
+  └─ pick a fuel (95, Diesel, LPG, …)
+       └─ 🏁 Best for this fuel   — cheapest single provider
+          ⛽ All providers         — all providers side by side
+          Circle K / Neste / …    — one specific provider
+          ⭐ Add / Remove favorite — pin this fuel to the top of the menu
+          🔙 Fuel list / 🏠 Home  — navigate back
 ```
 
-### `/best`
+Fuel list order: **95 → 95 Premium → 98 → Diesel → Diesel Premium → XTL → LPG → CNG → E85**
 
-Returns the cheapest provider for each currently available fuel type.
+Favorites appear first in the list, marked with ⭐.
 
-### `/circlek`
+---
 
-Returns only Circle K prices.
+## Slash commands
 
-### `/neste`
+Slash commands are optional shortcuts.
 
-Returns only Neste prices.
+### Prices
 
-### `/virsi`
+| Command | Output |
+|---|---|
+| `/fuel` | Full price comparison for all fuel types |
+| `/fuel <type>` | Cheapest provider for one fuel type |
+| `/price <type>` | Same as `/fuel <type>` |
+| `/best` | Cheapest provider per fuel, all fuels in one message |
+| `/circlek` | All prices from Circle K |
+| `/neste` | All prices from Neste |
+| `/virsi` | All prices from Virsi |
+| `/viada` | All prices from Viada |
 
-Returns only Virsi prices.
+**Supported fuel type aliases** (case-insensitive, spaces ignored):
 
-### `/viada`
+| You type | Resolves to |
+|---|---|
+| `95`, `95e`, `95miles`, `95futura` | 95 |
+| `95+`, `95plus`, `95premium` | 95 Premium |
+| `98`, `98e`, `98miles`, `98plus` | 98 |
+| `diesel`, `d`, `dd`, `dmiles` | Diesel |
+| `diesel+`, `diesel premium`, `d+`, `dmiles+` | Diesel Premium |
+| `xtl`, `milesxtl` | XTL |
+| `gas`, `lpg`, `autogas`, `autogāze` | LPG |
+| `cng` | CNG |
+| `e85` | E85 |
 
-Returns only Viada prices.
+Example: `/price diesel+` and `/price dieselpremium` both return the cheapest Diesel Premium price.
 
-### `/status`
+---
 
-Returns cache state, enabled providers, last refresh attempt, last successful refresh, the latest refresh issue if any, and last scrape result per provider.
+### Display mode
 
-### `/refresh`
-
-Forces data cache refresh and returns updated comparison output.
-
-Notes:
-
-- The command uses a short cooldown to prevent repeated refresh spam in busy chats.
-- Typical cooldown is per-chat and global, so very frequent repeated taps may return a short wait message.
-
-### `/mode <compact|full|auto>`
-
-Sets per-chat display mode.
-
-- `compact`: concise fuel output
-- `full`: full comparison output
-- `auto`: group/channel -> compact, private chat -> full
-
-### `/fav <add|remove|list|clear> <fuel>`
-
-Manages per-chat favorite fuels used in the inline Fuel Menu.
-
-Examples:
-
-```text
-/fav add diesel
-/fav list
+```
+/mode compact   — concise one-line-per-fuel view
+/mode full      — full comparison table with all providers
+/mode auto      — compact in groups/channels, full in private chat (default)
 ```
 
-## Output Notes
+Preference is saved per chat and persists until changed.
 
-- Prices are scraped from provider websites and normalized into shared fuel categories.
+---
+
+### Favorites
+
+Favorites appear at the top of the Fuel Menu with a ⭐. They can also be managed from the inline button inside each fuel's action menu.
+
+```
+/fav add <fuel>      — add a fuel to favorites
+/fav remove <fuel>   — remove a fuel from favorites
+/fav list            — show current favorites
+/fav clear           — remove all favorites
+```
+
+Example: `/fav add diesel`
+
+---
+
+### Cache and data
+
+| Command | Output |
+|---|---|
+| `/refresh` | Force-refresh scraped data, shows updated prices |
+| `/status` | Cache TTL, last refresh timestamps, per-provider scrape health |
+| `/ping` | Returns `pong` — quick health check |
+
+**Refresh cooldown:** 45 seconds per chat, 20 seconds globally. Tapping 🔄 Refresh too quickly shows a countdown message instead of triggering a redundant scrape.
+
+**Cache TTL:** 30 minutes — aligned with provider websites which update prices approximately hourly.
+
+---
+
+## Notes
+
 - If a provider does not publish a specific fuel type, it is omitted for that fuel row.
-- Provider-specific commands honor the `ENABLED_PROVIDERS` configuration.
-- Messages include source attribution and support credit.
-- Main responses include inline shortcut buttons for quick actions (`Fuel Menu`, `Best`, `95`, `Diesel`, `Help`, `Refresh`, `Status`).
-- In groups and channels, `/fuel` without arguments returns a compact snapshot by default to reduce chat noise.
-- `Fuel Menu` opens a dynamic fuel list based on currently scraped data.
-- Selecting a fuel opens a second inline menu with actions: best price for that fuel, all providers for that fuel, or provider-specific view.
-- Fuel menu entries are sorted in a stable fuel order and can show favorite fuels first.
-- Cache TTL is tuned for hourly provider updates, reducing unnecessary upstream scraping.
+- Provider-specific commands honour the `ENABLED_PROVIDERS` deployment configuration.
+- All prices are displayed in **EUR (€)**.
+- Timestamps are shown in **Europe/Riga** timezone.
+- Source attribution and a support link are included at the bottom of every price message.
 
-## Error and Fallback Behavior
+## Error behaviour
 
-- Unknown fuel alias: returns usage guidance.
-- Empty scrape result: returns temporary fetch error message.
-- Refresh failure: returns warning message.
+| Situation | What you see |
+|---|---|
+| Unknown fuel alias | Usage hint with supported aliases |
+| No data available | Inline error with prompt to tap 🔄 Refresh |
+| Refresh failed but cache exists | Warning + cached prices shown |
+| Refresh failed, no cache | Warning, prompt to try again |
+| Internal error during inline action | Error shown in-place, shortcuts remain visible |
+| Pressing the same button twice quickly | Silently ignored — message already shows the correct content |
