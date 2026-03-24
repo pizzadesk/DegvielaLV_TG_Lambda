@@ -76,6 +76,8 @@ def format_help_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
         f'{provider_commands} - one provider view\n'
         '/status - cache and scraper health\n'
         '/refresh - force refresh\n'
+        '/mode <compact|full|auto> - set chat display mode\n'
+        '/fav <add|remove|list|clear> <fuel> - manage favorites\n'
         '/ping - health check\n\n'
         f'Enabled providers: {enabled_names}'
     )
@@ -90,6 +92,8 @@ def format_start_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
         '2) Pick a fuel type\n'
         '3) Choose Best, All providers, or one provider\n\n'
         'Quick buttons also include Best, Refresh, and Status.\n\n'
+        'Optional: /mode sets compact or full view.\n'
+        'Optional: /fav lets you pin favorite fuels in Fuel Menu.\n\n'
         f'Enabled providers: {enabled_names}.\n\n'
         'Tip: /help shows all slash-command shortcuts.'
     )

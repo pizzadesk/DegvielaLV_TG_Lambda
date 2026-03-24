@@ -93,6 +93,25 @@ Returns cache state, enabled providers, last refresh attempt, last successful re
 
 Forces data cache refresh and returns updated comparison output.
 
+### `/mode <compact|full|auto>`
+
+Sets per-chat display mode.
+
+- `compact`: concise fuel output
+- `full`: full comparison output
+- `auto`: group/channel -> compact, private chat -> full
+
+### `/fav <add|remove|list|clear> <fuel>`
+
+Manages per-chat favorite fuels used in the inline Fuel Menu.
+
+Examples:
+
+```text
+/fav add diesel
+/fav list
+```
+
 ## Output Notes
 
 - Prices are scraped from provider websites and normalized into shared fuel categories.
@@ -103,6 +122,7 @@ Forces data cache refresh and returns updated comparison output.
 - In groups and channels, `/fuel` without arguments returns a compact snapshot by default to reduce chat noise.
 - `Fuel Menu` opens a dynamic fuel list based on currently scraped data.
 - Selecting a fuel opens a second inline menu with actions: best price for that fuel, all providers for that fuel, or provider-specific view.
+- Fuel menu entries are sorted in a stable fuel order and can show favorite fuels first.
 
 ## Error and Fallback Behavior
 
