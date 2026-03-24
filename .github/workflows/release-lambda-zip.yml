@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. v0.2.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -15,17 +21,44 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+          [[ "$VERSION" == v* ]] || VERSION="v$VERSION"
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      - name: Install and validate
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m compileall -q lambda_function.py fuel_price_telegram_bot
+          python -c "import lambda_function; import fuel_price_telegram_bot.bot; import fuel_price_telegram_bot.scraper; print('smoke ok')"
+
       - name: Build Lambda package
         shell: bash
         run: |
           set -euxo pipefail
-          python -m pip install --upgrade pip
           rm -rf .build_lambda lambda-deployment.zip
           mkdir -p .build_lambda
           python -m pip install -r requirements.txt -t .build_lambda
@@ -37,5 +70,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
           files: lambda-deployment.zip
           generate_release_notes: true
