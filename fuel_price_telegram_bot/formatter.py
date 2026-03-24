@@ -63,32 +63,35 @@ def format_help_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
     aliases = '|'.join(get_supported_aliases())
     enabled_names = ', '.join(get_brand_name(provider) for provider in enabled_providers)
     return (
-        'Available commands:\n'
-        '/fuel - show combined fuel price comparison\n'
-        f'/fuel <{aliases}> - cheapest for type (alias of /price)\n'
-        f'/price <{aliases}> - cheapest across enabled brands\n'
-        '/best - cheapest provider for each fuel type\n'
-        f'{provider_commands} - show one provider only\n'
-        '/status - show cache and scraper health\n'
-        '/refresh - refresh cached data\n'
-        '/ping - check bot is alive\n\n'
+        'Use the inline buttons under each bot message for the fastest flow:\n'
+        '- Fuel Menu: choose a fuel, then pick Best/All/Provider\n'
+        '- Best: cheapest provider by fuel\n'
+        '- Refresh: refresh cache\n'
+        '- Status: cache and scraper health\n\n'
+        'Optional slash commands:\n'
+        '/fuel - full comparison\n'
+        f'/fuel <{aliases}> - cheapest for one fuel type\n'
+        f'/price <{aliases}> - cheapest for one fuel type\n'
+        '/best - cheapest provider for each fuel\n'
+        f'{provider_commands} - one provider view\n'
+        '/status - cache and scraper health\n'
+        '/refresh - force refresh\n'
+        '/ping - health check\n\n'
         f'Enabled providers: {enabled_names}'
     )
 
 
 def format_start_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
-    aliases = '|'.join(get_supported_aliases())
-    provider_commands = ' '.join(f'/{provider}' for provider in enabled_providers)
     enabled_names = ', '.join(get_brand_name(provider) for provider in enabled_providers)
     return (
-        'Available commands:\n'
-        '/fuel - show combined fuel price comparison\n\n'
-        f'/fuel <{aliases}> - cheapest for type (alias of /price)\n\n'
-        f'/price <{aliases}> - cheapest across enabled brands\n\n'
-        '/best - cheapest provider for each fuel type\n\n'
-        f'{provider_commands} - show one provider only\n\n'
-        '/ping - check bot is alive\n\n'
+        'Welcome.\n\n'
+        'Use the inline buttons below this message:\n'
+        '1) Tap Fuel Menu\n'
+        '2) Pick a fuel type\n'
+        '3) Choose Best, All providers, or one provider\n\n'
+        'Quick buttons also include Best, Refresh, and Status.\n\n'
         f'Enabled providers: {enabled_names}.\n\n'
+        'Tip: /help shows all slash-command shortcuts.'
     )
 
 
@@ -154,6 +157,29 @@ def format_message(data: list[dict], enabled_providers: tuple[str, ...] | list[s
         message += "\n"
 
     message += _footer([_SOURCE_HOSTS[source] for source in active_providers])
+    return message
+
+
+def format_compact_message(data: list[dict], enabled_providers: tuple[str, ...] | list[str] | None = None) -> str:
+    if not data:
+        return "⛽ Unable to fetch fuel prices at this time. Please try again later.\n" + _CREDIT
+
+    active_providers = list(enabled_providers or _BRAND_NAMES)
+    message = "⛽ <b>Fuel Snapshot (Compact)</b>\n\n"
+    found_any = False
+
+    for item in data:
+        prices = _extract_prices(item, active_providers)
+        if not prices:
+            continue
+        found_any = True
+        best = prices[0]
+        message += f"<b>{item.get('fuel', 'Unknown')}</b>: {best[1]} €{best[2]} ⭐\n"
+
+    if not found_any:
+        return "⛽ No enabled providers returned fuel prices.\n" + _CREDIT
+
+    message += '\n' + _footer([_SOURCE_HOSTS[source] for source in active_providers])
     return message
 
 

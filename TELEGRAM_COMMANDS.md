@@ -99,6 +99,10 @@ Forces data cache refresh and returns updated comparison output.
 - If a provider does not publish a specific fuel type, it is omitted for that fuel row.
 - Provider-specific commands honor the `ENABLED_PROVIDERS` configuration.
 - Messages include source attribution and support credit.
+- Main responses include inline shortcut buttons for quick actions (`Fuel Menu`, `Best`, `95`, `Diesel`, `Refresh`, `Status`).
+- In groups and channels, `/fuel` without arguments returns a compact snapshot by default to reduce chat noise.
+- `Fuel Menu` opens a dynamic fuel list based on currently scraped data.
+- Selecting a fuel opens a second inline menu with actions: best price for that fuel, all providers for that fuel, or provider-specific view.
 
 ## Error and Fallback Behavior
 
