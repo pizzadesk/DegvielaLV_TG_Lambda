@@ -11,7 +11,7 @@ Most bot messages include a row of inline buttons — no slash commands needed f
 | Button | What it does |
 |---|---|
 | ⛽ **Fuel Menu** | Opens a fuel list → pick one → choose Best / All providers / single provider |
-| 🏁 **Best** | Cheapest provider for every fuel type in one view |
+| 📉 **Best** | Cheapest provider for every fuel type in one view |
 | **95** / **Diesel** | Cheapest price for that fuel, instantly |
 | ❓ **Help** | Shows this info inside the chat |
 | 🔄 **Refresh** | Forces a data refresh (subject to cooldown) |
@@ -22,7 +22,7 @@ Most bot messages include a row of inline buttons — no slash commands needed f
 ```
 ⛽ Fuel Menu
   └─ pick a fuel (95, Diesel, LPG, …)
-       └─ 🏁 Best for this fuel   — cheapest single provider
+       └─ 📉 Cheapest for this fuel   — cheapest single provider
           ⛽ All providers         — all providers side by side
           Circle K / Neste / …    — one specific provider
           ⭐ Add / Remove favorite — pin this fuel to the top of the menu

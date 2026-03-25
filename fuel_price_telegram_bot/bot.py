@@ -150,7 +150,7 @@ def _shortcuts_markup() -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton('⛽ Choose Fuel', callback_data=f'{_CB_PREFIX}fuelmenu'),
-                InlineKeyboardButton('⭐ Cheapest', callback_data=f'{_CB_PREFIX}best'),
+                InlineKeyboardButton('📉 Cheapest', callback_data=f'{_CB_PREFIX}best'),
             ],
             [
                 InlineKeyboardButton('95', callback_data=f'{_CB_PREFIX}fuelbest:95'),
@@ -199,7 +199,7 @@ def _fuel_actions_markup(
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
         [
-            InlineKeyboardButton('🏁 Cheapest for this fuel', callback_data=f'{_CB_PREFIX}fuelbest:{fuel_key}'),
+            InlineKeyboardButton('📉 Cheapest', callback_data=f'{_CB_PREFIX}fuelbest:{fuel_key}'),
             InlineKeyboardButton('⛽ All providers', callback_data=f'{_CB_PREFIX}fuelall:{fuel_key}'),
         ]
     ]

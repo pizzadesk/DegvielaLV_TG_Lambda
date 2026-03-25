@@ -63,33 +63,32 @@ def format_help_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
     aliases = '|'.join(get_supported_aliases())
     enabled_names = ', '.join(get_brand_name(provider) for provider in enabled_providers)
     return (
-        '<b>Need fuel prices fast? Start here:</b>\n'
-        '1) Tap <b>Choose Fuel</b>\n'
+        'Need fuel prices fast? Start here:\n'
+        '1) Tap Choose Fuel\n'
         '2) Pick fuel type (95, Diesel, LPG)\n'
-        '3) Choose <b>Cheapest</b>, <b>All providers</b>, or one provider\n\n'
-        '<b>Main buttons:</b>\n'
+        '3) Choose Cheapest, All providers, or one provider\n\n'
+        'Main buttons:\n'
         '- Choose Fuel: open fuel list\n'
         '- Cheapest: cheapest provider for each fuel\n'
         '- Update Prices: refresh latest prices\n'
         '- Bot Status: cache and provider health\n\n'
-        '<b>Quick commands:</b>\n'
+        'Quick commands:\n'
         '- /price diesel\n'
         '- /fuel\n'
         '- /best\n\n'
-        '<b>All commands:</b>\n'
+        'All commands:\n'
         '/fuel - full comparison\n'
-        f'/fuel <{aliases}> - cheapest for one fuel type\n'
-        f'/price <{aliases}> - cheapest for one fuel type\n'
+        f'/fuel [{aliases}] - cheapest for one fuel type\n'
+        f'/price [{aliases}] - cheapest for one fuel type\n'
         '/best - cheapest provider for each fuel\n'
         f'{provider_commands} - one provider\n'
         '/status - cache and provider health\n'
         '/refresh - update prices now\n'
-        '/mode <compact|full|auto> - message style\n'
-        '/fav <add|remove|list|clear> <fuel> - favorites\n'
+        '/mode [compact|full|auto] - message style\n'
+        '/fav [add|remove|list|clear] [fuel] - favorites\n'
         '/ping - bot health check\n\n'
         f'Enabled providers: {enabled_names}\n\n'
-        '☕ Ja noderēja, kafijai. Ja ne, nu neko:\n'
-        'buymeacoffee.com/pizzadesk'
+        '☕ Ja noderēja, kafijai. Ja ne, nu neko: buymeacoffee.com/pizzadesk\n'
     )
 
 
@@ -97,7 +96,6 @@ def format_start_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
     enabled_names = ', '.join(get_brand_name(provider) for provider in enabled_providers)
     return (
         'Welcome!\n\n'
-        'I help you find fuel prices in Latvia.\n\n'
         '1) Tap Choose Fuel\n'
         '2) Pick a fuel type\n'
         '3) Choose Cheapest, All providers, or one provider\n\n'
@@ -227,7 +225,7 @@ def format_best_prices(data: list[dict], enabled_providers: tuple[str, ...] | li
         return "⛽ Fuel prices are not available right now. Please try again in a moment.\n" + _CREDIT
 
     active_providers = list(enabled_providers or _BRAND_NAMES)
-    message = '🏁 <b>Cheapest Prices by Fuel</b>\n\n'
+    message = '📉 <b>Cheapest Prices by Fuel</b>\n\n'
     found_any = False
     for item in data:
         prices = _extract_prices(item, active_providers)
