@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 _BRAND_NAMES = {
     'circlek': 'Circle K',
     'neste': 'Neste',
-    'virsi': 'Virsi',
+    'virsi': 'Virši',
     'viada': 'Viada',
 }
 _SOURCE_HOSTS = {
@@ -63,9 +63,9 @@ def format_help_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
     aliases = '|'.join(get_supported_aliases())
     enabled_names = ', '.join(get_brand_name(provider) for provider in enabled_providers)
     return (
-        'Use the inline buttons under each bot message for the fastest flow:\n'
-        '- Fuel Menu: choose a fuel, then pick Best/All/Provider\n'
-        '- Best: cheapest provider by fuel\n'
+        'Press buttons below for fuel price information:\n\n'
+        '- Fuel Menu: choose a fuel, then pick Cheapest/All/Provider\n'
+        '- Cheapest: cheapest provider by fuel\n'
         '- Refresh: refresh cache\n'
         '- Status: cache and scraper health\n\n'
         'Optional slash commands:\n'
@@ -87,11 +87,11 @@ def format_start_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
     enabled_names = ', '.join(get_brand_name(provider) for provider in enabled_providers)
     return (
         'Welcome.\n\n'
-        'Use the inline buttons below this message:\n'
+        'Use the buttons below this message:\n\n'
         '1) Tap Fuel Menu\n'
         '2) Pick a fuel type\n'
-        '3) Choose Best, All providers, or one provider\n\n'
-        'Quick buttons also include Best, Refresh, and Status.\n\n'
+        '3) Choose Cheapest, All providers, or one provider\n\n'
+        'Quick buttons also include Cheapest, Refresh, and Status.\n\n'
         'Optional: /mode sets compact or full view.\n'
         'Optional: /fav lets you pin favorite fuels in Fuel Menu.\n\n'
         f'Enabled providers: {enabled_names}.\n\n'
@@ -108,7 +108,7 @@ def _footer(sources: list[str] | None = None) -> str:
     source_list = sources or list(_SOURCE_HOSTS.values())
     now = datetime.now(_DISPLAY_TIMEZONE)
     return (
-        f"🕒 Updated: {now.strftime('%Y-%m-%d %H:%M %Z')}\n"
+        f"🕒 Updated: {now.strftime('%Y-%m-%d %H:%M %Z')}\n\n"
         f"🔗 Websites: {', '.join(source_list)}\n"
         f"{_CREDIT}"
     )
@@ -193,7 +193,7 @@ def format_lowest_price(data: list[dict], fuel_query: str, enabled_providers: tu
 
     fuel_key = normalize_fuel_query(fuel_query)
     if not fuel_key:
-        return "❓ Unknown fuel type. Usage: /price <95|95+|98|diesel|diesel+|xtl|gas|lpg|cng|e85>\n" + _CREDIT
+        return "❓ Unknown fuel type. Use command: /price <95|95+|98|diesel|diesel+|xtl|gas|lpg|cng|e85>\n" + _CREDIT
 
     item = next((row for row in data if row.get('fuel') == fuel_key), None)
     if not item:
@@ -206,8 +206,8 @@ def format_lowest_price(data: list[dict], fuel_query: str, enabled_providers: tu
 
     best = prices[0]
     return (
-        f"⛽ Lowest price for <b>{fuel_key}</b>:\n"
-        f"<b>{best[1]}: €{best[2]}</b> ⭐\n"
+        f"⛽ Lowest price for <b>{fuel_key}</b>:\n\n"
+        f"<b>{best[1]}: €{best[2]}</b> ⭐\n\n"
         f"(Prices compared across {', '.join(get_brand_name(provider) for provider in active_providers)})\n"
         f"🔗 Sources: {', '.join(_SOURCE_HOSTS[provider] for provider in active_providers)}\n"
         + _CREDIT
@@ -219,7 +219,7 @@ def format_best_prices(data: list[dict], enabled_providers: tuple[str, ...] | li
         return "⛽ Unable to fetch fuel prices at this time. Please try again later.\n" + _CREDIT
 
     active_providers = list(enabled_providers or _BRAND_NAMES)
-    message = '🏁 <b>Best Price By Fuel</b>\n\n'
+    message = '🏁 <b>Cheapest Price By Fuel</b>\n\n'
     found_any = False
     for item in data:
         prices = _extract_prices(item, active_providers)
@@ -266,10 +266,10 @@ def format_status(status: dict) -> str:
     ttl_seconds = status.get('cache_ttl_seconds')
 
     message = '📊 <b>Bot Status</b>\n\n'
-    message += f"Enabled providers: {', '.join(get_brand_name(provider) for provider in enabled_sources)}\n"
+    message += f"Enabled providers: {', '.join(get_brand_name(provider) for provider in enabled_sources)}\n\n"
     message += f"Cache TTL: {ttl_seconds}s\n"
     message += f"Last refresh attempt: {_format_display_time(last_refresh_attempt_at)}\n"
-    message += f"Last refresh: {_format_display_time(last_refresh_at)}\n"
+    message += f"Last refresh: {_format_display_time(last_refresh_at)}\n\n"
     message += 'Cache expires: '
     message += _format_display_time(cache_expires_at) if cache_expires_at else 'no cache yet'
     if last_refresh_error:

@@ -17,7 +17,7 @@ A Telegram bot that scrapes and compares fuel prices from multiple Latvia fuel p
 - Cache and scraper health inspection via `/status`.
 - In-memory cache to reduce source-site requests.
 - Webhook-compatible AWS Lambda handler.
-- Buy Me a Coffee credit included in bot responses.
+- Buy Me a Coffee credit included in fuel/status response messages.
 
 ## Quickstart: Add Bot based on this framework To Telegram
 
@@ -121,6 +121,8 @@ This generates `lambda-deployment.zip` in the repository root.
 ## Automated GitHub Release Artifact
 
 This repository includes a GitHub Actions workflow that builds and uploads `lambda-deployment.zip` to a GitHub Release when you push a version tag.
+
+You can also trigger the workflow manually from GitHub Actions using the `workflow_dispatch` input `version` (for example `v1.0.0`).
 
 Example:
 

@@ -6,7 +6,7 @@ Prices are scraped from **Circle K**, **Neste**, **Virsi**, and **Viada** (Latvi
 
 ## The fastest way to use the bot
 
-Every bot message includes a row of inline buttons — no slash commands needed:
+Most bot messages include a row of inline buttons — no slash commands needed for normal use:
 
 | Button | What it does |
 |---|---|
@@ -118,6 +118,8 @@ Example: `/fav add diesel`
 - All prices are displayed in **EUR (€)**.
 - Timestamps are shown in **Europe/Riga** timezone.
 - Source attribution and a support link are included at the bottom of every price message.
+- `/ping` returns plain `pong` without shortcut buttons.
+- If a provider is disabled, provider command replies are plain text without shortcut buttons.
 
 ## Error behaviour
 
