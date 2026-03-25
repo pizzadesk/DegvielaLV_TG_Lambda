@@ -129,6 +129,10 @@ def _get_config(context: ContextTypes.DEFAULT_TYPE) -> Config:
     return context.bot_data['config']
 
 
+def _get_credit_message(context: ContextTypes.DEFAULT_TYPE) -> str:
+    return _get_config(context).CREDIT_MESSAGE
+
+
 def _get_data(context: ContextTypes.DEFAULT_TYPE, force_refresh: bool = False) -> list[dict]:
     config = _get_config(context)
     return get_fuel_prices(
@@ -149,8 +153,8 @@ def _shortcuts_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton('⛽ Fuel Menu', callback_data=f'{_CB_PREFIX}fuelmenu'),
-                InlineKeyboardButton('🏁 Best', callback_data=f'{_CB_PREFIX}best'),
+                InlineKeyboardButton('⛽ Choose Fuel', callback_data=f'{_CB_PREFIX}fuelmenu'),
+                InlineKeyboardButton('📉 Cheapest', callback_data=f'{_CB_PREFIX}best'),
             ],
             [
                 InlineKeyboardButton('95', callback_data=f'{_CB_PREFIX}fuelbest:95'),
@@ -158,8 +162,8 @@ def _shortcuts_markup() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton('❓ Help', callback_data=f'{_CB_PREFIX}help'),
-                InlineKeyboardButton('🔄 Refresh', callback_data=f'{_CB_PREFIX}refresh'),
-                InlineKeyboardButton('📊 Status', callback_data=f'{_CB_PREFIX}status'),
+                InlineKeyboardButton('🔄 Update Prices', callback_data=f'{_CB_PREFIX}refresh'),
+                InlineKeyboardButton('📊 Bot Status', callback_data=f'{_CB_PREFIX}status'),
             ],
         ]
     )
@@ -188,7 +192,7 @@ def _fuel_menu_markup(data: list[dict], favorites: list[str] | None = None) -> I
     if current:
         rows.append(current)
 
-    rows.append([InlineKeyboardButton('⬅️ Back', callback_data=f'{_CB_PREFIX}home')])
+    rows.append([InlineKeyboardButton('⬅️ Back to menu', callback_data=f'{_CB_PREFIX}home')])
     return InlineKeyboardMarkup(rows)
 
 
@@ -199,7 +203,7 @@ def _fuel_actions_markup(
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
         [
-            InlineKeyboardButton('🏁 Best for this fuel', callback_data=f'{_CB_PREFIX}fuelbest:{fuel_key}'),
+            InlineKeyboardButton('📉 Cheapest', callback_data=f'{_CB_PREFIX}fuelbest:{fuel_key}'),
             InlineKeyboardButton('⛽ All providers', callback_data=f'{_CB_PREFIX}fuelall:{fuel_key}'),
         ]
     ]
@@ -221,14 +225,14 @@ def _fuel_actions_markup(
 
     rows.append([
         InlineKeyboardButton(
-            '⭐ Remove favorite' if is_favorite else '⭐ Add favorite',
+            '⭐ Remove from favorites' if is_favorite else '⭐ Add to favorites',
             callback_data=f'{_CB_PREFIX}favtoggle:{fuel_key}',
         )
     ])
 
     rows.append([
         InlineKeyboardButton('🔙 Fuel list', callback_data=f'{_CB_PREFIX}fuelmenu'),
-        InlineKeyboardButton('🏠 Home', callback_data=f'{_CB_PREFIX}home'),
+        InlineKeyboardButton('🏠 Main menu', callback_data=f'{_CB_PREFIX}home'),
     ])
 
     return InlineKeyboardMarkup(rows)
@@ -303,12 +307,12 @@ def _refresh_cooldown_message(chat_remaining: int, global_remaining: int) -> str
 
     if chat_remaining > 0 and global_remaining > 0:
         wait_seconds = max(chat_remaining, global_remaining)
-        return f'⏱️ Refresh is cooling down. Try again in about {wait_seconds}s.'
+        return f'⏱️ Please wait about {wait_seconds}s, then tap Update Prices again.'
 
     if chat_remaining > 0:
-        return f'⏱️ This chat refreshed recently. Try again in about {chat_remaining}s.'
+        return f'⏱️ This chat updated recently. Please wait about {chat_remaining}s.'
 
-    return f'⏱️ Refresh is temporarily busy. Try again in about {global_remaining}s.'
+    return f'⏱️ Update is temporarily busy. Please wait about {global_remaining}s.'
 
 
 async def _run_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE, from_callback: bool = False) -> None:
@@ -337,7 +341,7 @@ async def _run_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE, from_
     if not refresh_result.refreshed:
         if data:
             text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS)
-            message = '⚠️ Could not refresh fuel prices; showing cached data.\n\n' + text
+            message = '⚠️ Could not update prices now. Showing saved data.\n\n' + text
             if from_callback:
                 await _edit_callback_html(update, message, reply_markup=_shortcuts_markup())
             else:
@@ -345,13 +349,13 @@ async def _run_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE, from_
             return
 
         if from_callback:
-            await _edit_callback_html(update, '⚠️ Could not refresh fuel prices; please try again.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '⚠️ Could not update prices now. Please try again.', reply_markup=_shortcuts_markup())
         else:
-            await _reply_text(update, '⚠️ Could not refresh fuel prices; please try again.', shortcuts=True)
+            await _reply_text(update, '⚠️ Could not update prices now. Please try again.', shortcuts=True)
         return
 
     text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS)
-    message = '✅ Cache updated. ' + text
+    message = '✅ Prices updated. ' + text
     if from_callback:
         await _edit_callback_html(update, message, reply_markup=_shortcuts_markup())
     else:
@@ -385,7 +389,7 @@ async def _handle_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         try:
             await _edit_callback_html(
                 update,
-                '⚠️ Something went wrong. Tap <b>🔄 Refresh</b> to reload data or try your action again.',
+                '⚠️ Something went wrong. Tap <b>🔄 Update Prices</b> or try again.',
                 reply_markup=_shortcuts_markup(),
             )
         except Exception:
@@ -409,10 +413,14 @@ async def _handle_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 async def _provider_command(update: Update, context: ContextTypes.DEFAULT_TYPE, provider: str) -> None:
     config = _get_config(context)
     if provider not in config.ENABLED_PROVIDERS:
-        await _reply_text(update, f'{provider} is currently disabled in this deployment.')
+        await _reply_text(
+            update,
+            f'{get_brand_name(provider)} is not available right now. Please choose another provider.',
+            shortcuts=True,
+        )
         return
 
-    text = format_provider_prices(_get_data(context), provider)
+    text = format_provider_prices(_get_data(context), provider, config.CREDIT_MESSAGE)
     await _reply_html(update, text, shortcuts=True)
 
 
@@ -423,8 +431,8 @@ def _format_fuel_view(
     enabled_providers: tuple[str, ...] | list[str],
 ) -> str:
     if _is_compact_mode(update, context):
-        return format_compact_message(data, enabled_providers)
-    return format_message(data, enabled_providers)
+        return format_compact_message(data, enabled_providers, _get_credit_message(context))
+    return format_message(data, enabled_providers, _get_credit_message(context))
 
 
 async def _send_fuel_view(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -433,7 +441,7 @@ async def _send_fuel_view(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     data = _get_data(context)
 
     if args:
-        text = format_lowest_price(data, args[0], config.ENABLED_PROVIDERS)
+        text = format_lowest_price(data, args[0], config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE)
     else:
         text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS)
 
@@ -447,11 +455,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config = _get_config(context)
-    await _reply_text(update, format_help_text(config.ENABLED_PROVIDERS), shortcuts=True)
+    await _reply_text(update, format_help_text(config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE), shortcuts=True)
 
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _reply_text(update, 'pong')
+    await _reply_text(update, 'pong ✅ Bot is online.', shortcuts=True)
 
 
 async def fuel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -461,12 +469,12 @@ async def fuel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args
     if not args:
-        await _reply_text(update, 'Usage: /price <95|95+|98|diesel|diesel+|xtl|gas|lpg|cng|e85>', shortcuts=True)
+        await _reply_text(update, 'Please add a fuel type. Example: /price diesel', shortcuts=True)
         return
 
     config = _get_config(context)
     fuel_query = args[0]
-    text = format_lowest_price(_get_data(context), fuel_query, config.ENABLED_PROVIDERS)
+    text = format_lowest_price(_get_data(context), fuel_query, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE)
     await _reply_html(update, text, shortcuts=True)
 
 
@@ -478,7 +486,7 @@ async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not args:
         await _reply_text(
             update,
-            f'Current mode: {current}. Usage: /mode <compact|full|auto>',
+            f'Current view mode: {current}. Use: /mode <compact|full|auto>',
             shortcuts=True,
         )
         return
@@ -487,15 +495,15 @@ async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if selected == 'auto':
         _set_mode(context, chat_id, None)
         effective = _get_chat_mode(update, context)
-        await _reply_text(update, f'Mode set to auto (currently {effective}).', shortcuts=True)
+        await _reply_text(update, f'View mode set to auto (currently {effective}).', shortcuts=True)
         return
 
     if selected not in {_MODE_COMPACT, _MODE_FULL}:
-        await _reply_text(update, 'Usage: /mode <compact|full|auto>', shortcuts=True)
+        await _reply_text(update, 'Use: /mode <compact|full|auto>', shortcuts=True)
         return
 
     _set_mode(context, chat_id, selected)
-    await _reply_text(update, f'Mode set to {selected}.', shortcuts=True)
+    await _reply_text(update, f'View mode set to {selected}.', shortcuts=True)
 
 
 async def favorite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -506,9 +514,9 @@ async def favorite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     if not args or args[0].lower() == 'list':
         if not favorites:
-            await _reply_text(update, 'No favorite fuels yet. Use /fav add <fuel>.', shortcuts=True)
+            await _reply_text(update, 'No favorites yet. Use: /fav add <fuel>', shortcuts=True)
             return
-        await _reply_text(update, 'Favorites: ' + ', '.join(favorites), shortcuts=True)
+        await _reply_text(update, 'Your favorites: ' + ', '.join(favorites), shortcuts=True)
         return
 
     action = args[0].lower()
@@ -518,33 +526,33 @@ async def favorite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     if len(args) < 2:
-        await _reply_text(update, 'Usage: /fav <add|remove|list|clear> <fuel>', shortcuts=True)
+        await _reply_text(update, 'Use: /fav <add|remove|list|clear> <fuel>', shortcuts=True)
         return
 
     fuel_name = _resolve_fuel_name(data, ' '.join(args[1:]))
     if not fuel_name:
-        await _reply_text(update, 'Fuel not found. Open Fuel Menu to see available fuels.', shortcuts=True)
+        await _reply_text(update, 'Fuel not found. Open Choose Fuel to see available options.', shortcuts=True)
         return
 
     if action == 'add':
         if fuel_name not in favorites:
             favorites.append(fuel_name)
             _set_favorites(context, chat_id, favorites)
-        await _reply_text(update, f'Added favorite: {fuel_name}', shortcuts=True)
+        await _reply_text(update, f'Added to favorites: {fuel_name}', shortcuts=True)
         return
 
     if action == 'remove':
         favorites = [fuel for fuel in favorites if fuel != fuel_name]
         _set_favorites(context, chat_id, favorites)
-        await _reply_text(update, f'Removed favorite: {fuel_name}', shortcuts=True)
+        await _reply_text(update, f'Removed from favorites: {fuel_name}', shortcuts=True)
         return
 
-    await _reply_text(update, 'Usage: /fav <add|remove|list|clear> <fuel>', shortcuts=True)
+    await _reply_text(update, 'Use: /fav <add|remove|list|clear> <fuel>', shortcuts=True)
 
 
 async def best(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config = _get_config(context)
-    text = format_best_prices(_get_data(context), config.ENABLED_PROVIDERS)
+    text = format_best_prices(_get_data(context), config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE)
     await _reply_html(update, text, shortcuts=True)
 
 
@@ -566,7 +574,7 @@ async def viada(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config = _get_config(context)
-    text = format_status(get_scrape_status(config.ENABLED_PROVIDERS))
+    text = format_status(get_scrape_status(config.ENABLED_PROVIDERS), config.CREDIT_MESSAGE)
     await _reply_html(update, text, shortcuts=True)
 
 
@@ -585,20 +593,20 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     data = _get_data(context)
 
     if action == f'{_CB_PREFIX}home':
-        await _edit_callback_html(update, 'Choose an action:', reply_markup=_shortcuts_markup())
+        await _edit_callback_html(update, 'Choose what you want to do:', reply_markup=_shortcuts_markup())
         return
 
     if action == f'{_CB_PREFIX}fuelmenu':
         if not data:
             await _edit_callback_html(
                 update,
-                '⛽ Fuel data is currently unavailable. Try Refresh and try again.',
+                '⛽ Fuel data is not available now. Tap Update Prices and try again.',
                 reply_markup=_shortcuts_markup(),
             )
             return
         await _edit_callback_html(
             update,
-            '⛽ <b>Select Fuel Type</b>\n\nChoose one fuel to open detailed actions.',
+            '⛽ <b>Select Fuel Type</b>\n\nChoose one fuel to see available actions.',
             reply_markup=_fuel_menu_markup(data, _get_favorites(context, _get_chat_id(update))),
         )
         return
@@ -609,14 +617,14 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if fuel is None:
             await _edit_callback_html(
                 update,
-                '❌ Fuel type is no longer available in current data. Open Fuel Menu again.',
+                '❌ This fuel is not available now. Open Choose Fuel and select another one.',
                 reply_markup=_shortcuts_markup(),
             )
             return
 
         await _edit_callback_html(
             update,
-            f'🛢️ <b>{fuel}</b>\n\nChoose how to view this fuel.',
+            f'🛢️ <b>{fuel}</b>\n\nChoose how you want to view this fuel.',
             reply_markup=_fuel_actions_markup(
                 fuel_key,
                 config.ENABLED_PROVIDERS,
@@ -629,10 +637,10 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         fuel_key = action.split(':', 2)[2]
         fuel = _find_fuel_by_key(data, fuel_key)
         if fuel is None:
-            await _edit_callback_html(update, '❌ Fuel type is no longer available.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
             return
 
-        text = format_lowest_price(data, fuel, config.ENABLED_PROVIDERS)
+        text = format_lowest_price(data, fuel, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE)
         await _edit_callback_html(
             update,
             text,
@@ -648,15 +656,15 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         fuel_key = action.split(':', 2)[2]
         fuel = _find_fuel_by_key(data, fuel_key)
         if fuel is None:
-            await _edit_callback_html(update, '❌ Fuel type is no longer available.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
             return
 
         row = _extract_fuel_row(data, fuel)
         if row is None:
-            await _edit_callback_html(update, '❌ Fuel type is no longer available.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
             return
 
-        text = format_message([row], config.ENABLED_PROVIDERS)
+        text = format_message([row], config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE)
         await _edit_callback_html(
             update,
             text,
@@ -671,22 +679,22 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if action.startswith(f'{_CB_PREFIX}fuelprov:'):
         parts = action.split(':', 3)
         if len(parts) != 4:
-            await _edit_callback_html(update, '❌ Unsupported action.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ This action is not available.', reply_markup=_shortcuts_markup())
             return
 
         provider = parts[2]
         fuel_key = parts[3]
         fuel = _find_fuel_by_key(data, fuel_key)
         if fuel is None:
-            await _edit_callback_html(update, '❌ Fuel type is no longer available.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
             return
 
         row = _extract_fuel_row(data, fuel)
         if row is None:
-            await _edit_callback_html(update, '❌ Fuel type is no longer available.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
             return
 
-        text = format_provider_prices([row], provider)
+        text = format_provider_prices([row], provider, config.CREDIT_MESSAGE)
         await _edit_callback_html(
             update,
             text,
@@ -702,22 +710,22 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         fuel_key = action.split(':', 2)[2]
         fuel = _find_fuel_by_key(data, fuel_key)
         if fuel is None:
-            await _edit_callback_html(update, '❌ Fuel type is no longer available.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
             return
 
         chat_id = _get_chat_id(update)
         favorites = _get_favorites(context, chat_id)
         if fuel in favorites:
             favorites = [item for item in favorites if item != fuel]
-            note = f'Removed favorite: {fuel}'
+            note = f'Removed from favorites: {fuel}'
         else:
             favorites.append(fuel)
-            note = f'Added favorite: {fuel}'
+            note = f'Added to favorites: {fuel}'
         _set_favorites(context, chat_id, favorites)
 
         await _edit_callback_html(
             update,
-            f'🛢️ <b>{fuel}</b>\n\n{note}\nChoose how to view this fuel.',
+            f'🛢️ <b>{fuel}</b>\n\n{note}\nChoose how you want to view this fuel.',
             reply_markup=_fuel_actions_markup(
                 fuel_key,
                 config.ENABLED_PROVIDERS,
@@ -731,15 +739,15 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     if action == f'{_CB_PREFIX}best':
-        await _edit_callback_html(update, format_best_prices(_get_data(context), config.ENABLED_PROVIDERS), reply_markup=_shortcuts_markup())
+        await _edit_callback_html(update, format_best_prices(_get_data(context), config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
         return
 
     if action == f'{_CB_PREFIX}help':
-        await _edit_callback_text(update, format_help_text(config.ENABLED_PROVIDERS), reply_markup=_shortcuts_markup())
+        await _edit_callback_text(update, format_help_text(config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
         return
 
     if action == f'{_CB_PREFIX}status':
-        await _edit_callback_html(update, format_status(get_scrape_status(config.ENABLED_PROVIDERS)), reply_markup=_shortcuts_markup())
+        await _edit_callback_html(update, format_status(get_scrape_status(config.ENABLED_PROVIDERS), config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
         return
 
     if action == f'{_CB_PREFIX}refresh':
@@ -747,11 +755,11 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     if action == f'{_CB_PREFIX}price:95':
-        await _edit_callback_html(update, format_lowest_price(_get_data(context), '95', config.ENABLED_PROVIDERS), reply_markup=_shortcuts_markup())
+        await _edit_callback_html(update, format_lowest_price(_get_data(context), '95', config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
         return
 
     if action == f'{_CB_PREFIX}price:diesel':
-        await _edit_callback_html(update, format_lowest_price(_get_data(context), 'diesel', config.ENABLED_PROVIDERS), reply_markup=_shortcuts_markup())
+        await _edit_callback_html(update, format_lowest_price(_get_data(context), 'diesel', config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
         return
 
 

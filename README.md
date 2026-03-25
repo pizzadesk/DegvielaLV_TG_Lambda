@@ -1,34 +1,81 @@
-# Latvia Fuel Prices Telegram Bot (AWS Lambda)
+# Latvia Fuel Prices Telegram Bot Framework
 
-A Telegram bot that scrapes and compares fuel prices from multiple Latvia fuel providers and returns the data on demand.
+AWS Lambda-friendly Telegram bot framework for scraping and comparing fuel prices from Latvia fuel providers.
 
-## Features
+The repository is usable as-is for the included providers, but it is also structured so you can fork it, deploy your own bot, choose which providers to expose, and define your own credit or support message through environment variables.
 
-- Aggregates prices from:
-  - Circle K: https://www.circlek.lv/degviela-miles/degvielas-cenas
-  - Neste: https://www.neste.lv/lv/content/degvielas-cenas
-  - Virsi: https://www.virsi.lv/lv/privatpersonam/degviela/degvielas-un-elektrouzlades-cenas
-  - Viada: https://www.viada.lv/zemakas-degvielas-cenas/
-- Fuel name normalization across providers (for example, `95miles`/`95E`/`Neste Futura 95` -> `95`).
-- Combined comparison output via `/fuel`.
-- Cheapest-by-fuel lookup across all providers via `/price <fuel>`.
-- Cheapest-per-fuel summary via `/best`.
-- Provider-specific views via `/circlek`, `/neste`, `/virsi`, and `/viada`.
-- Cache and scraper health inspection via `/status`.
-- In-memory cache to reduce source-site requests.
-- Webhook-compatible AWS Lambda handler.
-- Buy Me a Coffee credit included in bot responses.
+## What it does
 
-## Quickstart: Add Bot based on this framework To Telegram
+- Scrapes prices from Circle K, Neste, Virsi, and Viada.
+- Normalizes fuel names across providers into a consistent set.
+- Serves Telegram commands and inline-button flows for browsing fuel prices.
+- Caches results in memory to reduce repeated scraping.
+- Runs behind an AWS Lambda webhook endpoint.
+- Supports deployment-time customization through environment variables.
 
-1. Open Telegram and start a chat with `@BotFather`.
-2. Run `/newbot`, choose a bot name and a unique username ending with `bot`.
-3. Copy the bot token returned by BotFather.
-4. Open AWS Lambda for this project and set environment variables:
-   - `TELEGRAM_TOKEN=<your bot token>`
-   - `TELEGRAM_SECRET=<your random secret>` (recommended)
-5. Deploy your Lambda and copy its public HTTPS webhook URL.
-6. Register webhook with Telegram:
+## Supported providers
+
+- Circle K: https://www.circlek.lv/degviela-miles/degvielas-cenas
+- Neste: https://www.neste.lv/lv/content/degvielas-cenas
+- Virsi: https://www.virsi.lv/lv/privatpersonam/degviela/degvielas-un-elektrouzlades-cenas
+- Viada: https://www.viada.lv/zemakas-degvielas-cenas/
+
+## Project layout
+
+- `lambda_function.py`: AWS Lambda webhook entrypoint.
+- `fuel_price_telegram_bot/config.py`: environment-driven runtime configuration.
+- `fuel_price_telegram_bot/scraper.py`: scraping, normalization, and cache management.
+- `fuel_price_telegram_bot/formatter.py`: user-facing message formatting.
+- `fuel_price_telegram_bot/bot.py`: Telegram handlers, callbacks, and application setup.
+- `scripts/build_lambda_zip.ps1`: deployment zip builder for Lambda.
+
+## How the request flow works
+
+1. Telegram sends an update to your Lambda webhook URL.
+2. `lambda_function.py` validates the request and optional Telegram secret header.
+3. The payload is converted into a Telegram `Update` object.
+4. `fuel_price_telegram_bot/bot.py` routes the command or button action.
+5. `fuel_price_telegram_bot/scraper.py` fetches cached data or refreshes provider prices.
+6. `fuel_price_telegram_bot/formatter.py` builds the response message.
+
+## Environment variables
+
+Set these in AWS Lambda or a local `.env` file.
+
+| Variable | Required | Description |
+|---|---|---|
+| `TELEGRAM_TOKEN` | Yes | Bot token from BotFather. |
+| `TELEGRAM_SECRET` | No | Secret used to validate the `x-telegram-bot-api-secret-token` webhook header. |
+| `TARGET_URL` | No | Override for the primary Circle K source URL. Defaults to the built-in Circle K page. |
+| `ENABLED_PROVIDERS` | No | Comma-separated provider list such as `circlek,neste,virsi,viada`. Defaults to all supported providers. |
+| `CREDIT_MESSAGE` | No | Custom footer/support/credit text appended to price, status, and help messages. Set to an empty string to disable it entirely. |
+
+### Default credit message
+
+If `CREDIT_MESSAGE` is not provided, the framework uses the built-in support line:
+
+```text
+☕ Ja noderēja, kafijai. Ja ne, nu neko: buymeacoffee.com/pizzadesk
+```
+
+### Example Lambda configuration
+
+```text
+TELEGRAM_TOKEN=123456:example-token
+TELEGRAM_SECRET=replace-with-random-secret
+ENABLED_PROVIDERS=circlek,neste,virsi
+CREDIT_MESSAGE=Built on DegvielaLV framework by YourProject. Support: https://example.com
+```
+
+## Deploy your own bot
+
+1. Create a Telegram bot with `@BotFather` and copy the token.
+2. Deploy this repository to AWS Lambda.
+3. Configure the environment variables listed above.
+4. Expose the Lambda through a public HTTPS endpoint.
+5. Register the webhook with Telegram.
+
+Webhook registration example:
 
 ```bash
 curl -X POST "https://api.telegram.org/bot<TELEGRAM_TOKEN>/setWebhook" \
@@ -36,65 +83,13 @@ curl -X POST "https://api.telegram.org/bot<TELEGRAM_TOKEN>/setWebhook" \
   -d '{"url":"<YOUR_LAMBDA_WEBHOOK_URL>","secret_token":"<TELEGRAM_SECRET>"}'
 ```
 
-7. In Telegram, open your bot chat and press Start or send `/start`.
-8. Optional: add the bot to a group via group info -> Add Members, then grant needed admin permissions.
+Lambda handler:
 
-## Project Structure
+```text
+lambda_function.lambda_handler
+```
 
-- `lambda_function.py` - AWS Lambda webhook entrypoint.
-- `fuel_price_telegram_bot/config.py` - environment configuration.
-- `fuel_price_telegram_bot/scraper.py` - scraping, normalization, and caching logic.
-- `fuel_price_telegram_bot/formatter.py` - response formatting logic.
-- `fuel_price_telegram_bot/bot.py` - Telegram command handlers and app setup.
-- `fuel_price_telegram_bot/__init__.py` - package exports.
-
-## How It Works
-
-1. Telegram sends webhook updates to your Lambda endpoint.
-2. `lambda_function.py` validates request shape and optional secret header.
-3. The update payload is converted to a Telegram `Update` object.
-4. Command handlers in `fuel_price_telegram_bot/bot.py` process commands.
-5. `fuel_price_telegram_bot/scraper.py` fetches and normalizes provider prices.
-6. `fuel_price_telegram_bot/formatter.py` returns user-friendly message output.
-
-## AWS Lambda Usage
-
-### Environment Variables
-
-Set these in Lambda configuration:
-
-- `TELEGRAM_TOKEN` (required): Telegram bot token.
-- `TARGET_URL` (optional): primary Circle K URL override.
-- `TELEGRAM_SECRET` (optional): expected Telegram secret token for webhook verification.
-- `ENABLED_PROVIDERS` (optional): comma-separated provider list such as `circlek,neste,virsi,viada`.
-
-Default `TARGET_URL`:
-
-- `https://www.circlek.lv/degviela-miles/degvielas-cenas` - because I personally use it often, not because I am sponsored or advertising in any commercial way.
-
-### Lambda Handler
-
-Use:
-
-- `lambda_function.lambda_handler`
-
-### Telegram Webhook Secret (optional)
-
-If `TELEGRAM_SECRET` is set, Lambda checks incoming header:
-
-- `x-telegram-bot-api-secret-token`
-
-Mismatched secret returns `403 Forbidden`.
-
-### Response Behavior
-
-- `200 OK` on success.
-- `400` for invalid or empty JSON body.
-- `500` for invalid token/configuration/runtime errors.
-
-## Local Development Notes
-
-This repository stores source code only. Install dependencies from `requirements.txt`.
+## Local development
 
 Install dependencies:
 
@@ -102,56 +97,77 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-For quick local bot run (polling mode), execute:
+Optional local `.env` example:
+
+```text
+TELEGRAM_TOKEN=123456:example-token
+TELEGRAM_SECRET=replace-with-random-secret
+ENABLED_PROVIDERS=circlek,neste,virsi,viada
+CREDIT_MESSAGE=Custom footer text for your deployment
+```
+
+Start the bot locally in polling mode:
 
 ```bash
 python -m fuel_price_telegram_bot.bot
 ```
 
-## Build Lambda Deployment Zip
+## Build a Lambda deployment package
 
-Create a deployment zip (code + dependencies) with:
+Create the deployment zip with:
 
 ```powershell
 ./scripts/build_lambda_zip.ps1
 ```
 
-This generates `lambda-deployment.zip` in the repository root.
+The script outputs `lambda-deployment.zip` in the repository root.
 
-## Automated GitHub Release Artifact
+## Bot capabilities
 
-This repository includes a GitHub Actions workflow that builds and uploads `lambda-deployment.zip` to a GitHub Release when you push a version tag.
+- `/fuel`: full comparison for all available fuels.
+- `/fuel <type>` and `/price <type>`: cheapest provider for one fuel.
+- `/best`: cheapest provider for each fuel type.
+- `/status`: cache details and provider health.
+- `/refresh`: forces a refresh with cooldown protection.
+- `/mode`: per-chat compact/full rendering preference.
+- `/fav`: per-chat favorite fuels for faster menu access.
+- `/circlek`, `/neste`, `/virsi`, `/viada`: provider-specific price views when enabled.
 
-Example:
+Full command behavior is documented in [TELEGRAM_COMMANDS.md](TELEGRAM_COMMANDS.md).
+
+## Notes for framework users
+
+- `ENABLED_PROVIDERS` controls both scraping and which provider commands are available.
+- `CREDIT_MESSAGE` is deployment-specific, so forks can add their own support link or attribution without editing Python code.
+- Setting `CREDIT_MESSAGE` to an empty string removes the footer credit from formatted responses.
+- Status, fuel, best-price, and provider-specific messages all use the same configured credit value.
+
+## Lambda responses
+
+- `200 OK`: update accepted or console test without a webhook payload.
+- `400 Bad Request`: invalid JSON or empty request body.
+- `403 Forbidden`: webhook secret mismatch.
+- `500 Internal Server Error`: invalid token, invalid configuration, or runtime failure.
+
+## CI and release notes
+
+This repository includes GitHub workflows that:
+
+- install Python dependencies,
+- compile Python sources,
+- run import smoke checks,
+- build `lambda-deployment.zip` for releases.
+
+You can publish a tagged release artifact with:
 
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-## Continuous Integration
+## Third-party notices
 
-This repository includes a CI workflow that runs on push and pull requests:
+Dependencies are listed in `requirements.txt`.
 
-- Installs dependencies from `requirements.txt`
-- Compiles Python sources
-- Runs import smoke checks for Lambda entrypoint and bot modules
-
-## Telegram Commands
-
-Command reference is documented in:
-
-- [TELEGRAM_COMMANDS.md](TELEGRAM_COMMANDS.md)
-
-Core commands include `/fuel`, `/price`, `/best`, `/status`, `/refresh`, and per-brand commands for each enabled provider.
-
-## Third-Party Licenses
-
-This repository depends on third-party packages installed from `requirements.txt`.
-
-- See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for package-level license attributions.
+- See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for package-level license notices.
 - Keep that file when redistributing source or deployment artifacts.
-
-## Credits
-
-- Buy me a coffee: https://buymeacoffee.com/pizzadesk
