@@ -124,7 +124,7 @@ def _footer(sources: list[str] | None = None, credit_message: str | None = None)
     source_list = sources or list(_SOURCE_HOSTS.values())
     now = datetime.now(_DISPLAY_TIMEZONE)
     lines = [
-        f"🕒 Updated: {now.strftime('%Y-%m-%d %H:%M %Z')}",
+        f"🕒 Updated: {_format_display_time(now)}",
         '',
         f"🔗 Websites: {', '.join(source_list)}",
     ]
@@ -136,12 +136,43 @@ def _footer(sources: list[str] | None = None, credit_message: str | None = None)
 
 def _format_display_time(value: datetime | None) -> str:
     if value is None:
-        return 'not refreshed yet'
+        return 'not yet'
 
     if value.tzinfo is None:
         value = value.replace(tzinfo=ZoneInfo('UTC'))
 
-    return value.astimezone(_DISPLAY_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S %Z')
+    local = value.astimezone(_DISPLAY_TIMEZONE)
+    now = datetime.now(_DISPLAY_TIMEZONE)
+    if local.date() == now.date():
+        day_label = 'today'
+    elif local.date() == (now.date()).fromordinal(now.date().toordinal() - 1):
+        day_label = 'yesterday'
+    else:
+        day_label = local.strftime('%Y-%m-%d')
+
+    return f"{day_label} at {local.strftime('%H:%M')} (Riga time)"
+
+
+def _format_cache_duration(ttl_seconds: int | None) -> str:
+    if not isinstance(ttl_seconds, int) or ttl_seconds <= 0:
+        return 'unknown'
+
+    if ttl_seconds < 60:
+        return 'less than 1 minute'
+
+    minutes = round(ttl_seconds / 60)
+    if minutes < 60:
+        unit = 'minute' if minutes == 1 else 'minutes'
+        return f'about {minutes} {unit}'
+
+    hours = minutes // 60
+    remaining_minutes = minutes % 60
+    hour_unit = 'hour' if hours == 1 else 'hours'
+    if remaining_minutes == 0:
+        return f'about {hours} {hour_unit}'
+
+    minute_unit = 'minute' if remaining_minutes == 1 else 'minutes'
+    return f'about {hours} {hour_unit} {remaining_minutes} {minute_unit}'
 
 
 def _extract_prices(item: dict, providers: tuple[str, ...] | list[str] | None = None) -> list[tuple[float, str, str, str]]:
@@ -303,26 +334,26 @@ def format_status(status: dict, credit_message: str | None = None) -> str:
     cache_expires_at = status.get('cache_expires_at')
     ttl_seconds = status.get('cache_ttl_seconds')
 
-    message = '📊 <b>Bot Status</b>\n\n'
-    message += f"Available providers: {', '.join(get_brand_name(provider) for provider in enabled_sources)}\n\n"
-    message += f"Data cache time: {ttl_seconds}s\n"
-    message += f"Last update try: {_format_display_time(last_refresh_attempt_at)}\n"
+    message = '📊 <b>Status</b>\n\n'
+    message += f"Fuel stations in this bot: {', '.join(get_brand_name(provider) for provider in enabled_sources)}\n\n"
+    message += f"Prices are refreshed about every: {_format_cache_duration(ttl_seconds)}\n"
+    message += f"Last check for new prices: {_format_display_time(last_refresh_attempt_at)}\n"
     message += f"Last successful update: {_format_display_time(last_refresh_at)}\n\n"
-    message += 'Data valid until: '
+    message += 'Current prices kept until: '
     message += _format_display_time(cache_expires_at) if cache_expires_at else 'no cache yet'
     if last_refresh_error:
-        message += f"\nLast update issue: {last_refresh_error}"
+        message += f"\nLatest problem: {last_refresh_error}"
     message += '\n\n'
 
     for source, source_status in status.get('sources', {}).items():
         provider_name = source_status.get('name', get_brand_name(source))
         if not source_status.get('enabled'):
-            message += f"{provider_name}: not enabled\n"
+            message += f"{provider_name}: turned off\n"
             continue
         if source_status.get('ok'):
-            message += f"{provider_name}: ok ({source_status.get('count', 0)} fuel types)\n"
+            message += f"{provider_name}: working ({source_status.get('count', 0)} fuel types found)\n"
         else:
             error = source_status.get('error') or 'waiting for first successful update'
-            message += f"{provider_name}: issue - {error}\n"
+            message += f"{provider_name}: problem - {error}\n"
 
     return _append_credit(message.rstrip(), credit_message)
