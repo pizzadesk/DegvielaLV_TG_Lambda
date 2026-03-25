@@ -70,10 +70,10 @@ CREDIT_MESSAGE=Built on DegvielaLV framework by YourProject. Support: https://ex
 ## Deploy your own bot
 
 1. Create a Telegram bot with `@BotFather` and copy the token.
-2. Deploy this repository to AWS Lambda.
-3. Configure the environment variables listed above.
-4. Expose the Lambda through a public HTTPS endpoint.
-5. Register the webhook with Telegram.
+2. Deploy **the Release .zip** to AWS Lambda. You can also create a release .zip locally by running ./scripts/build_lambda_zip.ps1 from repository root
+4. Configure the environment variables listed above.
+5. Expose the Lambda through a public HTTPS endpoint.
+6. Register the webhook with Telegram.
 
 Webhook registration example:
 
