@@ -46,7 +46,6 @@ _FUEL_QUERY_ALIASES = {
     'e85': 'E85',
 }
 _HELP_ALIASES = ['95', '95+', '98', 'diesel', 'diesel+', 'xtl', 'gas', 'lpg', 'cng', 'e85']
-_CREDIT = '☕ Ja noderēja, kafijai. Ja ne, nu neko: buymeacoffee.com/pizzadesk'
 _DISPLAY_TIMEZONE = ZoneInfo('Europe/Riga')
 
 
@@ -58,11 +57,22 @@ def get_brand_name(source: str) -> str:
     return _BRAND_NAMES.get(source, source)
 
 
-def format_help_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
+def _normalize_credit_message(credit_message: str | None) -> str:
+    return credit_message.strip() if credit_message else ''
+
+
+def _append_credit(message: str, credit_message: str | None) -> str:
+    credit = _normalize_credit_message(credit_message)
+    if not credit:
+        return message
+    return f'{message}\n\n{credit}'
+
+
+def format_help_text(enabled_providers: tuple[str, ...] | list[str], credit_message: str | None = None) -> str:
     provider_commands = ' '.join(f'/{provider}' for provider in enabled_providers)
     aliases = '|'.join(get_supported_aliases())
     enabled_names = ', '.join(get_brand_name(provider) for provider in enabled_providers)
-    return (
+    message = (
         'Need fuel prices fast? Start here:\n'
         '1) Tap Choose Fuel\n'
         '2) Pick fuel type (95, Diesel, LPG)\n'
@@ -87,9 +97,9 @@ def format_help_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
         '/mode [compact|full|auto] - message style\n'
         '/fav [add|remove|list|clear] [fuel] - favorites\n'
         '/ping - bot health check\n\n'
-        f'Enabled providers: {enabled_names}\n\n'
-        '☕ Ja noderēja, kafijai. Ja ne, nu neko: buymeacoffee.com/pizzadesk\n'
+        f'Enabled providers: {enabled_names}'
     )
+    return _append_credit(message, credit_message)
 
 
 def format_start_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
@@ -110,14 +120,18 @@ def normalize_fuel_query(fuel_query: str) -> str | None:
     return _FUEL_QUERY_ALIASES.get(normalized)
 
 
-def _footer(sources: list[str] | None = None) -> str:
+def _footer(sources: list[str] | None = None, credit_message: str | None = None) -> str:
     source_list = sources or list(_SOURCE_HOSTS.values())
     now = datetime.now(_DISPLAY_TIMEZONE)
-    return (
-        f"🕒 Updated: {now.strftime('%Y-%m-%d %H:%M %Z')}\n\n"
-        f"🔗 Websites: {', '.join(source_list)}\n"
-        f"{_CREDIT}"
-    )
+    lines = [
+        f"🕒 Updated: {now.strftime('%Y-%m-%d %H:%M %Z')}",
+        '',
+        f"🔗 Websites: {', '.join(source_list)}",
+    ]
+    credit = _normalize_credit_message(credit_message)
+    if credit:
+        lines.append(credit)
+    return '\n'.join(lines)
 
 
 def _format_display_time(value: datetime | None) -> str:
@@ -145,9 +159,13 @@ def _extract_prices(item: dict, providers: tuple[str, ...] | list[str] | None = 
     return prices
 
 
-def format_message(data: list[dict], enabled_providers: tuple[str, ...] | list[str] | None = None) -> str:
+def format_message(
+    data: list[dict],
+    enabled_providers: tuple[str, ...] | list[str] | None = None,
+    credit_message: str | None = None,
+) -> str:
     if not data:
-        return "⛽ Fuel prices are not available right now. Please try again in a moment.\n" + _CREDIT
+        return _append_credit('⛽ Fuel prices are not available right now. Please try again in a moment.', credit_message)
 
     active_providers = list(enabled_providers or _BRAND_NAMES)
     message = "⛽ <b>Fuel Prices in Latvia</b>\n\n"
@@ -166,13 +184,17 @@ def format_message(data: list[dict], enabled_providers: tuple[str, ...] | list[s
                 message += f"{name}: €{raw_price}\n"
         message += "\n"
 
-    message += _footer([_SOURCE_HOSTS[source] for source in active_providers])
+    message += _footer([_SOURCE_HOSTS[source] for source in active_providers], credit_message)
     return message
 
 
-def format_compact_message(data: list[dict], enabled_providers: tuple[str, ...] | list[str] | None = None) -> str:
+def format_compact_message(
+    data: list[dict],
+    enabled_providers: tuple[str, ...] | list[str] | None = None,
+    credit_message: str | None = None,
+) -> str:
     if not data:
-        return "⛽ Fuel prices are not available right now. Please try again in a moment.\n" + _CREDIT
+        return _append_credit('⛽ Fuel prices are not available right now. Please try again in a moment.', credit_message)
 
     active_providers = list(enabled_providers or _BRAND_NAMES)
     message = "⛽ <b>Fuel Prices (Quick View)</b>\n\n"
@@ -187,42 +209,52 @@ def format_compact_message(data: list[dict], enabled_providers: tuple[str, ...] 
         message += f"<b>{item.get('fuel', 'Unknown')}</b>: {best[1]} €{best[2]} ⭐\n"
 
     if not found_any:
-        return "⛽ No enabled providers returned fuel prices.\n" + _CREDIT
+        return _append_credit('⛽ No enabled providers returned fuel prices.', credit_message)
 
-    message += '\n' + _footer([_SOURCE_HOSTS[source] for source in active_providers])
+    message += '\n' + _footer([_SOURCE_HOSTS[source] for source in active_providers], credit_message)
     return message
 
 
-def format_lowest_price(data: list[dict], fuel_query: str, enabled_providers: tuple[str, ...] | list[str] | None = None) -> str:
+def format_lowest_price(
+    data: list[dict],
+    fuel_query: str,
+    enabled_providers: tuple[str, ...] | list[str] | None = None,
+    credit_message: str | None = None,
+) -> str:
     if not data:
-        return "⛽ Fuel prices are not available right now. Please try again in a moment.\n" + _CREDIT
+        return _append_credit('⛽ Fuel prices are not available right now. Please try again in a moment.', credit_message)
 
     fuel_key = normalize_fuel_query(fuel_query)
     if not fuel_key:
-        return "❓ Fuel type not recognized. Example: /price diesel\n" + _CREDIT
+        return _append_credit('❓ Fuel type not recognized. Example: /price diesel', credit_message)
 
     item = next((row for row in data if row.get('fuel') == fuel_key), None)
     if not item:
-        return f"❌ {fuel_key} is not available in the latest update.\n" + _CREDIT
+        return _append_credit(f'❌ {fuel_key} is not available in the latest update.', credit_message)
 
     active_providers = list(enabled_providers or _BRAND_NAMES)
     prices = _extract_prices(item, active_providers)
     if not prices:
-        return f"❌ No prices available for {fuel_key} right now.\n" + _CREDIT
+        return _append_credit(f'❌ No prices available for {fuel_key} right now.', credit_message)
 
     best = prices[0]
-    return (
+    return _append_credit(
         f"⛽ Cheapest price for <b>{fuel_key}</b>:\n\n"
         f"<b>{best[1]}: €{best[2]}</b> ⭐\n\n"
         f"Compared providers: {', '.join(get_brand_name(provider) for provider in active_providers)}\n"
         f"🔗 Sources: {', '.join(_SOURCE_HOSTS[provider] for provider in active_providers)}\n"
-        + _CREDIT
+        .rstrip(),
+        credit_message,
     )
 
 
-def format_best_prices(data: list[dict], enabled_providers: tuple[str, ...] | list[str] | None = None) -> str:
+def format_best_prices(
+    data: list[dict],
+    enabled_providers: tuple[str, ...] | list[str] | None = None,
+    credit_message: str | None = None,
+) -> str:
     if not data:
-        return "⛽ Fuel prices are not available right now. Please try again in a moment.\n" + _CREDIT
+        return _append_credit('⛽ Fuel prices are not available right now. Please try again in a moment.', credit_message)
 
     active_providers = list(enabled_providers or _BRAND_NAMES)
     message = '📉 <b>Cheapest Prices by Fuel</b>\n\n'
@@ -236,14 +268,14 @@ def format_best_prices(data: list[dict], enabled_providers: tuple[str, ...] | li
         message += f"<b>{item.get('fuel', 'Unknown')}</b>: {best[1]} €{best[2]} ⭐\n"
 
     if not found_any:
-        return "⛽ No enabled providers returned fuel prices.\n" + _CREDIT
+        return _append_credit('⛽ No enabled providers returned fuel prices.', credit_message)
 
-    return message + '\n' + _footer([_SOURCE_HOSTS[source] for source in active_providers])
+    return message + '\n' + _footer([_SOURCE_HOSTS[source] for source in active_providers], credit_message)
 
 
-def format_provider_prices(data: list[dict], provider: str) -> str:
+def format_provider_prices(data: list[dict], provider: str, credit_message: str | None = None) -> str:
     if not data:
-        return "⛽ Fuel prices are not available right now. Please try again in a moment.\n" + _CREDIT
+        return _append_credit('⛽ Fuel prices are not available right now. Please try again in a moment.', credit_message)
 
     provider_name = get_brand_name(provider)
     host = _SOURCE_HOSTS.get(provider, provider)
@@ -258,12 +290,12 @@ def format_provider_prices(data: list[dict], provider: str) -> str:
         message += f"<b>{item.get('fuel', 'Unknown')}</b>: €{price}\n"
 
     if not found_any:
-        return f"❌ No prices available for {provider_name} right now.\n" + _CREDIT
+        return _append_credit(f'❌ No prices available for {provider_name} right now.', credit_message)
 
-    return message + '\n' + _footer([host])
+    return message + '\n' + _footer([host], credit_message)
 
 
-def format_status(status: dict) -> str:
+def format_status(status: dict, credit_message: str | None = None) -> str:
     enabled_sources = status.get('enabled_sources', [])
     last_refresh_attempt_at = status.get('last_refresh_attempt_at')
     last_refresh_at = status.get('last_refresh_at')
@@ -293,5 +325,4 @@ def format_status(status: dict) -> str:
             error = source_status.get('error') or 'waiting for first successful update'
             message += f"{provider_name}: issue - {error}\n"
 
-    message += '\n' + _CREDIT
-    return message
+    return _append_credit(message.rstrip(), credit_message)

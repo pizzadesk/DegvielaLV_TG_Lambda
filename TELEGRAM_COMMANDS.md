@@ -11,7 +11,7 @@ Most bot messages include a row of inline buttons — no slash commands needed f
 | Button | What it does |
 |---|---|
 | ⛽ **Fuel Menu** | Opens a fuel list → pick one → choose Best / All providers / single provider |
-| 📉 **Best** | Cheapest provider for every fuel type in one view |
+| 📉 **Cheapest** | Cheapest provider for every fuel type in one view |
 | **95** / **Diesel** | Cheapest price for that fuel, instantly |
 | ❓ **Help** | Shows this info inside the chat |
 | 🔄 **Refresh** | Forces a data refresh (subject to cooldown) |
@@ -117,7 +117,9 @@ Example: `/fav add diesel`
 - Provider-specific commands honour the `ENABLED_PROVIDERS` deployment configuration.
 - All prices are displayed in **EUR (€)**.
 - Timestamps are shown in **Europe/Riga** timezone.
-- Source attribution and a support link are included at the bottom of every price message.
+- The footer credit/support text comes from the `CREDIT_MESSAGE` environment variable.
+- If `CREDIT_MESSAGE` is unset, the built-in default support line is used.
+- If `CREDIT_MESSAGE` is set to an empty string, the footer credit is omitted.
 - `/ping` returns plain `pong` without shortcut buttons.
 - If a provider is disabled, provider command replies are plain text without shortcut buttons.
 
