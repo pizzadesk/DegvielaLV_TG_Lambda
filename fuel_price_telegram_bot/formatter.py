@@ -46,7 +46,7 @@ _FUEL_QUERY_ALIASES = {
     'e85': 'E85',
 }
 _HELP_ALIASES = ['95', '95+', '98', 'diesel', 'diesel+', 'xtl', 'gas', 'lpg', 'cng', 'e85']
-_CREDIT = '☕ Support: buymeacoffee.com/pizzadesk'
+_CREDIT = '☕ Ja noderēja, kafijai. Ja ne, nu neko: buymeacoffee.com/pizzadesk'
 _DISPLAY_TIMEZONE = ZoneInfo('Europe/Riga')
 
 
@@ -63,39 +63,47 @@ def format_help_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
     aliases = '|'.join(get_supported_aliases())
     enabled_names = ', '.join(get_brand_name(provider) for provider in enabled_providers)
     return (
-        'Press buttons below for fuel price information:\n\n'
-        '- Fuel Menu: choose a fuel, then pick Cheapest/All/Provider\n'
-        '- Cheapest: cheapest provider by fuel\n'
-        '- Refresh: refresh cache\n'
-        '- Status: cache and scraper health\n\n'
-        'Optional slash commands:\n'
+        '<b>Need fuel prices fast? Start here:</b>\n'
+        '1) Tap <b>Choose Fuel</b>\n'
+        '2) Pick fuel type (95, Diesel, LPG)\n'
+        '3) Choose <b>Cheapest</b>, <b>All providers</b>, or one provider\n\n'
+        '<b>Main buttons:</b>\n'
+        '- Choose Fuel: open fuel list\n'
+        '- Cheapest: cheapest provider for each fuel\n'
+        '- Update Prices: refresh latest prices\n'
+        '- Bot Status: cache and provider health\n\n'
+        '<b>Quick commands:</b>\n'
+        '- /price diesel\n'
+        '- /fuel\n'
+        '- /best\n\n'
+        '<b>All commands:</b>\n'
         '/fuel - full comparison\n'
         f'/fuel <{aliases}> - cheapest for one fuel type\n'
         f'/price <{aliases}> - cheapest for one fuel type\n'
         '/best - cheapest provider for each fuel\n'
-        f'{provider_commands} - one provider view\n'
-        '/status - cache and scraper health\n'
-        '/refresh - force refresh\n'
-        '/mode <compact|full|auto> - set chat display mode\n'
-        '/fav <add|remove|list|clear> <fuel> - manage favorites\n'
-        '/ping - health check\n\n'
-        f'Enabled providers: {enabled_names}'
+        f'{provider_commands} - one provider\n'
+        '/status - cache and provider health\n'
+        '/refresh - update prices now\n'
+        '/mode <compact|full|auto> - message style\n'
+        '/fav <add|remove|list|clear> <fuel> - favorites\n'
+        '/ping - bot health check\n\n'
+        f'Enabled providers: {enabled_names}\n\n'
+        '☕ Ja noderēja, kafijai. Ja ne, nu neko:\n'
+        'buymeacoffee.com/pizzadesk'
     )
 
 
 def format_start_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
     enabled_names = ', '.join(get_brand_name(provider) for provider in enabled_providers)
     return (
-        'Welcome.\n\n'
-        'Use the buttons below this message:\n\n'
-        '1) Tap Fuel Menu\n'
+        'Welcome!\n\n'
+        'I help you find fuel prices in Latvia.\n\n'
+        '1) Tap Choose Fuel\n'
         '2) Pick a fuel type\n'
         '3) Choose Cheapest, All providers, or one provider\n\n'
-        'Quick buttons also include Cheapest, Refresh, and Status.\n\n'
-        'Optional: /mode sets compact or full view.\n'
-        'Optional: /fav lets you pin favorite fuels in Fuel Menu.\n\n'
-        f'Enabled providers: {enabled_names}.\n\n'
-        'Tip: /help shows all slash-command shortcuts.'
+        'You can also use Cheapest, Update Prices, and Bot Status buttons.\n\n'
+        'Need help? Tap Help or send /help.\n'
+        f'Enabled providers: {enabled_names}.'
     )
 
 
@@ -141,10 +149,10 @@ def _extract_prices(item: dict, providers: tuple[str, ...] | list[str] | None = 
 
 def format_message(data: list[dict], enabled_providers: tuple[str, ...] | list[str] | None = None) -> str:
     if not data:
-        return "⛽ Unable to fetch fuel prices at this time. Please try again later.\n" + _CREDIT
+        return "⛽ Fuel prices are not available right now. Please try again in a moment.\n" + _CREDIT
 
     active_providers = list(enabled_providers or _BRAND_NAMES)
-    message = "⛽ <b>Latvia Fuel Prices</b>\n\n"
+    message = "⛽ <b>Fuel Prices in Latvia</b>\n\n"
 
     for item in data:
         fuel = item.get('fuel', 'Unknown')
@@ -166,10 +174,10 @@ def format_message(data: list[dict], enabled_providers: tuple[str, ...] | list[s
 
 def format_compact_message(data: list[dict], enabled_providers: tuple[str, ...] | list[str] | None = None) -> str:
     if not data:
-        return "⛽ Unable to fetch fuel prices at this time. Please try again later.\n" + _CREDIT
+        return "⛽ Fuel prices are not available right now. Please try again in a moment.\n" + _CREDIT
 
     active_providers = list(enabled_providers or _BRAND_NAMES)
-    message = "⛽ <b>Fuel Snapshot (Compact)</b>\n\n"
+    message = "⛽ <b>Fuel Prices (Quick View)</b>\n\n"
     found_any = False
 
     for item in data:
@@ -189,26 +197,26 @@ def format_compact_message(data: list[dict], enabled_providers: tuple[str, ...] 
 
 def format_lowest_price(data: list[dict], fuel_query: str, enabled_providers: tuple[str, ...] | list[str] | None = None) -> str:
     if not data:
-        return "⛽ Unable to fetch fuel prices at this time. Please try again later.\n" + _CREDIT
+        return "⛽ Fuel prices are not available right now. Please try again in a moment.\n" + _CREDIT
 
     fuel_key = normalize_fuel_query(fuel_query)
     if not fuel_key:
-        return "❓ Unknown fuel type. Use command: /price <95|95+|98|diesel|diesel+|xtl|gas|lpg|cng|e85>\n" + _CREDIT
+        return "❓ Fuel type not recognized. Example: /price diesel\n" + _CREDIT
 
     item = next((row for row in data if row.get('fuel') == fuel_key), None)
     if not item:
-        return f"❌ Fuel type '{fuel_key}' not found in latest scrape.\n" + _CREDIT
+        return f"❌ {fuel_key} is not available in the latest update.\n" + _CREDIT
 
     active_providers = list(enabled_providers or _BRAND_NAMES)
     prices = _extract_prices(item, active_providers)
     if not prices:
-        return f"❌ No prices available for {fuel_key}.\n" + _CREDIT
+        return f"❌ No prices available for {fuel_key} right now.\n" + _CREDIT
 
     best = prices[0]
     return (
-        f"⛽ Lowest price for <b>{fuel_key}</b>:\n\n"
+        f"⛽ Cheapest price for <b>{fuel_key}</b>:\n\n"
         f"<b>{best[1]}: €{best[2]}</b> ⭐\n\n"
-        f"(Prices compared across {', '.join(get_brand_name(provider) for provider in active_providers)})\n"
+        f"Compared providers: {', '.join(get_brand_name(provider) for provider in active_providers)}\n"
         f"🔗 Sources: {', '.join(_SOURCE_HOSTS[provider] for provider in active_providers)}\n"
         + _CREDIT
     )
@@ -216,10 +224,10 @@ def format_lowest_price(data: list[dict], fuel_query: str, enabled_providers: tu
 
 def format_best_prices(data: list[dict], enabled_providers: tuple[str, ...] | list[str] | None = None) -> str:
     if not data:
-        return "⛽ Unable to fetch fuel prices at this time. Please try again later.\n" + _CREDIT
+        return "⛽ Fuel prices are not available right now. Please try again in a moment.\n" + _CREDIT
 
     active_providers = list(enabled_providers or _BRAND_NAMES)
-    message = '🏁 <b>Cheapest Price By Fuel</b>\n\n'
+    message = '🏁 <b>Cheapest Prices by Fuel</b>\n\n'
     found_any = False
     for item in data:
         prices = _extract_prices(item, active_providers)
@@ -237,11 +245,11 @@ def format_best_prices(data: list[dict], enabled_providers: tuple[str, ...] | li
 
 def format_provider_prices(data: list[dict], provider: str) -> str:
     if not data:
-        return "⛽ Unable to fetch fuel prices at this time. Please try again later.\n" + _CREDIT
+        return "⛽ Fuel prices are not available right now. Please try again in a moment.\n" + _CREDIT
 
     provider_name = get_brand_name(provider)
     host = _SOURCE_HOSTS.get(provider, provider)
-    message = f"⛽ <b>{provider_name} Prices</b>\n\n"
+    message = f"⛽ <b>{provider_name} Fuel Prices</b>\n\n"
     found_any = False
 
     for item in data:
@@ -252,7 +260,7 @@ def format_provider_prices(data: list[dict], provider: str) -> str:
         message += f"<b>{item.get('fuel', 'Unknown')}</b>: €{price}\n"
 
     if not found_any:
-        return f"❌ No prices available for {provider_name}.\n" + _CREDIT
+        return f"❌ No prices available for {provider_name} right now.\n" + _CREDIT
 
     return message + '\n' + _footer([host])
 
@@ -266,25 +274,25 @@ def format_status(status: dict) -> str:
     ttl_seconds = status.get('cache_ttl_seconds')
 
     message = '📊 <b>Bot Status</b>\n\n'
-    message += f"Enabled providers: {', '.join(get_brand_name(provider) for provider in enabled_sources)}\n\n"
-    message += f"Cache TTL: {ttl_seconds}s\n"
-    message += f"Last refresh attempt: {_format_display_time(last_refresh_attempt_at)}\n"
-    message += f"Last refresh: {_format_display_time(last_refresh_at)}\n\n"
-    message += 'Cache expires: '
+    message += f"Available providers: {', '.join(get_brand_name(provider) for provider in enabled_sources)}\n\n"
+    message += f"Data cache time: {ttl_seconds}s\n"
+    message += f"Last update try: {_format_display_time(last_refresh_attempt_at)}\n"
+    message += f"Last successful update: {_format_display_time(last_refresh_at)}\n\n"
+    message += 'Data valid until: '
     message += _format_display_time(cache_expires_at) if cache_expires_at else 'no cache yet'
     if last_refresh_error:
-        message += f"\nLast refresh issue: {last_refresh_error}"
+        message += f"\nLast update issue: {last_refresh_error}"
     message += '\n\n'
 
     for source, source_status in status.get('sources', {}).items():
         provider_name = source_status.get('name', get_brand_name(source))
         if not source_status.get('enabled'):
-            message += f"{provider_name}: disabled\n"
+            message += f"{provider_name}: not enabled\n"
             continue
         if source_status.get('ok'):
-            message += f"{provider_name}: ok ({source_status.get('count', 0)} fuels)\n"
+            message += f"{provider_name}: ok ({source_status.get('count', 0)} fuel types)\n"
         else:
-            error = source_status.get('error') or 'waiting for first successful scrape'
+            error = source_status.get('error') or 'waiting for first successful update'
             message += f"{provider_name}: issue - {error}\n"
 
     message += '\n' + _CREDIT
