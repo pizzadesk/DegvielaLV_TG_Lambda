@@ -13,6 +13,7 @@ Your own project code is licensed under MIT (see LICENSE). Dependencies keep the
 | `beautifulsoup4` | beautifulsoup4 | MIT | https://code.launchpad.net/beautifulsoup |
 | `soupsieve` | soupsieve | MIT | https://github.com/facelessuser/soupsieve |
 | `python-dotenv` | python-dotenv | BSD-3-Clause | https://github.com/theskumar/python-dotenv |
+| `boto3` | AWS SDK for Python | Apache-2.0 | https://github.com/boto/boto3 |
 
 ## License Text Availability
 

@@ -204,17 +204,17 @@ def _shortcuts_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton('⛽ Choose Fuel', callback_data=f'{_CB_PREFIX}fuelmenu'),
-                InlineKeyboardButton('📉 Cheapest', callback_data=f'{_CB_PREFIX}best'),
+                InlineKeyboardButton('⛽ Degviela', callback_data=f'{_CB_PREFIX}fuelmenu'),
+                InlineKeyboardButton('💰 Lētākais', callback_data=f'{_CB_PREFIX}best'),
             ],
             [
                 InlineKeyboardButton('95', callback_data=f'{_CB_PREFIX}fuelbest:95'),
                 InlineKeyboardButton('Diesel', callback_data=f'{_CB_PREFIX}fuelbest:diesel'),
+                InlineKeyboardButton('LPG', callback_data=f'{_CB_PREFIX}fuelbest:lpg'),
             ],
             [
-                InlineKeyboardButton('❓ Help', callback_data=f'{_CB_PREFIX}help'),
-                InlineKeyboardButton('🔄 Update Prices', callback_data=f'{_CB_PREFIX}refresh'),
-                InlineKeyboardButton('📊 Bot Status', callback_data=f'{_CB_PREFIX}status'),
+                InlineKeyboardButton('❓ Palīdzība', callback_data=f'{_CB_PREFIX}help'),
+                InlineKeyboardButton('🔄 Atjaunot', callback_data=f'{_CB_PREFIX}refresh'),
             ],
         ]
     )
@@ -243,7 +243,7 @@ def _fuel_menu_markup(data: list[dict], favorites: list[str] | None = None) -> I
     if current:
         rows.append(current)
 
-    rows.append([InlineKeyboardButton('⬅️ Back to menu', callback_data=f'{_CB_PREFIX}home')])
+    rows.append([InlineKeyboardButton('← Atpakaļ', callback_data=f'{_CB_PREFIX}home')])
     return InlineKeyboardMarkup(rows)
 
 
@@ -254,8 +254,8 @@ def _fuel_actions_markup(
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
         [
-            InlineKeyboardButton('📉 Cheapest', callback_data=f'{_CB_PREFIX}fuelbest:{fuel_key}'),
-            InlineKeyboardButton('⛽ All providers', callback_data=f'{_CB_PREFIX}fuelall:{fuel_key}'),
+            InlineKeyboardButton('💰 Lētākais', callback_data=f'{_CB_PREFIX}fuelbest:{fuel_key}'),
+            InlineKeyboardButton('⛽ Visas stacijas', callback_data=f'{_CB_PREFIX}fuelall:{fuel_key}'),
         ]
     ]
 
@@ -276,14 +276,14 @@ def _fuel_actions_markup(
 
     rows.append([
         InlineKeyboardButton(
-            '⭐ Remove from favorites' if is_favorite else '⭐ Add to favorites',
+            '⭐ Noņemt' if is_favorite else '⭐ Saglabāt',
             callback_data=f'{_CB_PREFIX}favtoggle:{fuel_key}',
         )
     ])
 
     rows.append([
-        InlineKeyboardButton('🔙 Fuel list', callback_data=f'{_CB_PREFIX}fuelmenu'),
-        InlineKeyboardButton('🏠 Main menu', callback_data=f'{_CB_PREFIX}home'),
+        InlineKeyboardButton('← Atpakaļ', callback_data=f'{_CB_PREFIX}fuelmenu'),
+        InlineKeyboardButton('🏠 Sākums', callback_data=f'{_CB_PREFIX}home'),
     ])
 
     return InlineKeyboardMarkup(rows)
@@ -358,12 +358,12 @@ def _refresh_cooldown_message(chat_remaining: int, global_remaining: int) -> str
 
     if chat_remaining > 0 and global_remaining > 0:
         wait_seconds = max(chat_remaining, global_remaining)
-        return f'⏱️ Please wait about {wait_seconds}s, then tap Update Prices again.'
+        return f'⏱️ Uzgaidi {wait_seconds}s.'
 
     if chat_remaining > 0:
-        return f'⏱️ This chat updated recently. Please wait about {chat_remaining}s.'
+        return f'⏱️ Uzgaidi {chat_remaining}s.'
 
-    return f'⏱️ Update is temporarily busy. Please wait about {global_remaining}s.'
+    return f'⏱️ Uzgaidi {global_remaining}s.'
 
 
 async def _run_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE, from_callback: bool = False) -> None:
@@ -393,7 +393,7 @@ async def _run_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE, from_
     if not refresh_result.refreshed:
         if data:
             text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS, diffs=diffs, changed_at=changed_at)
-            message = '⚠️ Could not update prices now. Showing saved data.\n\n' + text
+            message = '⚠️ Neizdevās atjaunot. Izmantoju vecos datus.\n\n' + text
             if from_callback:
                 await _edit_callback_html(update, message, reply_markup=_shortcuts_markup())
             else:
@@ -401,13 +401,13 @@ async def _run_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE, from_
             return
 
         if from_callback:
-            await _edit_callback_html(update, '⚠️ Could not update prices now. Please try again.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '⚠️ Neizdevās atjaunot. Mēģini vēlreiz.', reply_markup=_shortcuts_markup())
         else:
-            await _reply_text(update, '⚠️ Could not update prices now. Please try again.', shortcuts=True)
+            await _reply_text(update, '⚠️ Neizdevās atjaunot. Mēģini vēlreiz.', shortcuts=True)
         return
 
     text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS, diffs=diffs, changed_at=changed_at)
-    message = '✅ Prices updated. ' + text
+    message = '✅ Atjaunots! ' + text
     if from_callback:
         await _edit_callback_html(update, message, reply_markup=_shortcuts_markup())
     else:
@@ -441,7 +441,7 @@ async def _handle_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         try:
             await _edit_callback_html(
                 update,
-                '⚠️ Something went wrong. Tap <b>🔄 Update Prices</b> or try again.',
+                '⚠️ Kļūda. Nospied <b>🔄 Atjaunot</b>.',
                 reply_markup=_shortcuts_markup(),
             )
         except Exception:
@@ -455,9 +455,9 @@ async def _handle_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
     try:
         await message.reply_text(
-            '⚠️ An internal error occurred. Please try again later.',
-            reply_markup=_shortcuts_markup(),
-        )
+                '⚠️ Kļūda. Mēģini vēlreiz.',
+                reply_markup=_shortcuts_markup(),
+            )
     except Exception:
         logger.exception('Failed to send error notification')
 
@@ -467,7 +467,7 @@ async def _provider_command(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     if provider not in config.ENABLED_PROVIDERS:
         await _reply_text(
             update,
-            f'{get_brand_name(provider)} is not available right now. Please choose another provider.',
+            f'{get_brand_name(provider)} nav pieejams. Izvēlies citu.',
             shortcuts=True,
         )
         return
@@ -514,7 +514,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _reply_text(update, 'pong ✅ Bot is online.', shortcuts=True)
+    await _reply_text(update, '✅ Darbojas.', shortcuts=True)
 
 
 async def fuel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -524,7 +524,7 @@ async def fuel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args
     if not args:
-        await _reply_text(update, 'Please add a fuel type. Example: /price diesel', shortcuts=True)
+        await _reply_text(update, 'Pievieno degvielas veidu. Piemērs: /price diesel', shortcuts=True)
         return
 
     config = _get_config(context)
@@ -542,7 +542,7 @@ async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not args:
         await _reply_text(
             update,
-            f'Current view mode: {current}. Use: /mode <compact|full|auto>',
+            f'Pašreizējais skats: {current}. Maini: /mode compact|full|auto',
             shortcuts=True,
         )
         return
@@ -551,15 +551,15 @@ async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if selected == 'auto':
         _set_mode(context, chat_id, None)
         effective = _get_chat_mode(update, context)
-        await _reply_text(update, f'View mode set to auto (currently {effective}).', shortcuts=True)
+        await _reply_text(update, f'Skats: auto ({effective}).', shortcuts=True)
         return
 
     if selected not in {_MODE_COMPACT, _MODE_FULL}:
-        await _reply_text(update, 'Use: /mode <compact|full|auto>', shortcuts=True)
+        await _reply_text(update, 'Izmanto: /mode compact|full|auto', shortcuts=True)
         return
 
     _set_mode(context, chat_id, selected)
-    await _reply_text(update, f'View mode set to {selected}.', shortcuts=True)
+    await _reply_text(update, f'Skats: {selected}.', shortcuts=True)
 
 
 async def favorite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -570,40 +570,40 @@ async def favorite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     if not args or args[0].lower() == 'list':
         if not favorites:
-            await _reply_text(update, 'No favorites yet. Use: /fav add <fuel>', shortcuts=True)
+            await _reply_text(update, 'Nav saglabātu. Pievieno: /fav add 95', shortcuts=True)
             return
-        await _reply_text(update, 'Your favorites: ' + ', '.join(favorites), shortcuts=True)
+        await _reply_text(update, 'Saglabātie: ' + ', '.join(favorites), shortcuts=True)
         return
 
     action = args[0].lower()
     if action == 'clear':
         _set_favorites(context, chat_id, [])
-        await _reply_text(update, 'Favorites cleared.', shortcuts=True)
+        await _reply_text(update, 'Notīrīts.', shortcuts=True)
         return
 
     if len(args) < 2:
-        await _reply_text(update, 'Use: /fav <add|remove|list|clear> <fuel>', shortcuts=True)
+        await _reply_text(update, 'Izmanto: /fav add|remove|list|clear [degviela]', shortcuts=True)
         return
 
     fuel_name = _resolve_fuel_name(data, ' '.join(args[1:]))
     if not fuel_name:
-        await _reply_text(update, 'Fuel not found. Open Choose Fuel to see available options.', shortcuts=True)
+        await _reply_text(update, 'Degvielas veids nav atrasts.', shortcuts=True)
         return
 
     if action == 'add':
         if fuel_name not in favorites:
             favorites.append(fuel_name)
             _set_favorites(context, chat_id, favorites)
-        await _reply_text(update, f'Added to favorites: {fuel_name}', shortcuts=True)
+        await _reply_text(update, f'⭐ Pievienots: {fuel_name}', shortcuts=True)
         return
 
     if action == 'remove':
         favorites = [fuel for fuel in favorites if fuel != fuel_name]
         _set_favorites(context, chat_id, favorites)
-        await _reply_text(update, f'Removed from favorites: {fuel_name}', shortcuts=True)
+        await _reply_text(update, f'Noņemts: {fuel_name}', shortcuts=True)
         return
 
-    await _reply_text(update, 'Use: /fav <add|remove|list|clear> <fuel>', shortcuts=True)
+    await _reply_text(update, 'Izmanto: /fav add|remove|list|clear [degviela]', shortcuts=True)
 
 
 async def best(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -650,20 +650,20 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     data, diffs, changed_at = _get_display_data(context)
 
     if action == f'{_CB_PREFIX}home':
-        await _edit_callback_html(update, 'Choose what you want to do:', reply_markup=_shortcuts_markup())
+        await _edit_callback_html(update, 'Izvēlies:', reply_markup=_shortcuts_markup())
         return
 
     if action == f'{_CB_PREFIX}fuelmenu':
         if not data:
             await _edit_callback_html(
                 update,
-                '⛽ Fuel data is not available now. Tap Update Prices and try again.',
+                '⚠️ Dati nav pieejami. Nospied 🔄 Atjaunot.',
                 reply_markup=_shortcuts_markup(),
             )
             return
         await _edit_callback_html(
             update,
-            '⛽ <b>Select Fuel Type</b>\n\nChoose one fuel to see available actions.',
+            'Izvēlies degvielas veidu:',
             reply_markup=_fuel_menu_markup(data, _get_favorites(context, _get_chat_id(update))),
         )
         return
@@ -674,14 +674,14 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if fuel is None:
             await _edit_callback_html(
                 update,
-                '❌ This fuel is not available now. Open Choose Fuel and select another one.',
+                '❌ Nav pieejams. Nospied ⛽ Degviela.',
                 reply_markup=_shortcuts_markup(),
             )
             return
 
         await _edit_callback_html(
             update,
-            f'🛢️ <b>{fuel}</b>\n\nChoose how you want to view this fuel.',
+            f'🛢️ <b>{fuel}</b>',
             reply_markup=_fuel_actions_markup(
                 fuel_key,
                 config.ENABLED_PROVIDERS,
@@ -694,7 +694,7 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         fuel_key = action.split(':', 2)[2]
         fuel = _find_fuel_by_key(data, fuel_key)
         if fuel is None:
-            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ Nav pieejams.', reply_markup=_shortcuts_markup())
             return
 
         text = format_lowest_price(data, fuel, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
@@ -713,12 +713,12 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         fuel_key = action.split(':', 2)[2]
         fuel = _find_fuel_by_key(data, fuel_key)
         if fuel is None:
-            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ Nav pieejams.', reply_markup=_shortcuts_markup())
             return
 
         row = _extract_fuel_row(data, fuel)
         if row is None:
-            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ Nav pieejams.', reply_markup=_shortcuts_markup())
             return
 
         text = format_message([row], config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
@@ -736,19 +736,19 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if action.startswith(f'{_CB_PREFIX}fuelprov:'):
         parts = action.split(':', 3)
         if len(parts) != 4:
-            await _edit_callback_html(update, '❌ This action is not available.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ Nav pieejams.', reply_markup=_shortcuts_markup())
             return
 
         provider = parts[2]
         fuel_key = parts[3]
         fuel = _find_fuel_by_key(data, fuel_key)
         if fuel is None:
-            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ Nav pieejams.', reply_markup=_shortcuts_markup())
             return
 
         row = _extract_fuel_row(data, fuel)
         if row is None:
-            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ Nav pieejams.', reply_markup=_shortcuts_markup())
             return
 
         text = format_provider_prices([row], provider, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
@@ -767,22 +767,22 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         fuel_key = action.split(':', 2)[2]
         fuel = _find_fuel_by_key(data, fuel_key)
         if fuel is None:
-            await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '❌ Nav pieejams.', reply_markup=_shortcuts_markup())
             return
 
         chat_id = _get_chat_id(update)
         favorites = _get_favorites(context, chat_id)
         if fuel in favorites:
             favorites = [item for item in favorites if item != fuel]
-            note = f'Removed from favorites: {fuel}'
+            note = 'Noņemts.'
         else:
             favorites.append(fuel)
-            note = f'Added to favorites: {fuel}'
+            note = 'Pievienots! ⭐'
         _set_favorites(context, chat_id, favorites)
 
         await _edit_callback_html(
             update,
-            f'🛢️ <b>{fuel}</b>\n\n{note}\nChoose how you want to view this fuel.',
+            f'🛢️ <b>{fuel}</b> — {note}',
             reply_markup=_fuel_actions_markup(
                 fuel_key,
                 config.ENABLED_PROVIDERS,
