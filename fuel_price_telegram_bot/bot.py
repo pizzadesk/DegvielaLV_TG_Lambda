@@ -441,7 +441,7 @@ async def _handle_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         try:
             await _edit_callback_html(
                 update,
-                '⚠️ Kļūda. Nospied <b>🔄 Atjaunot</b>.',
+                '⚠️ Kļūda. Nospied "🔄 Atjaunot".',
                 reply_markup=_shortcuts_markup(),
             )
         except Exception:

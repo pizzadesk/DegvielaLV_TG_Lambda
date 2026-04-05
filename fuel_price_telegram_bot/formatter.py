@@ -80,17 +80,17 @@ def _append_credit(message: str, credit_message: str | None) -> str:
 def format_help_text(enabled_providers: tuple[str, ...] | list[str], credit_message: str | None = None) -> str:
     provider_commands = ' · '.join(f'/{provider}' for provider in enabled_providers)
     message = (
-        '<b>Kā lietot botu</b>\n\n'
-        '⛽ <b>Degviela</b> — nospied pogu, izvēlies degvielu un uzpildes punktu\n'
-        '💰 <b>Lētākais</b> — uzē vislabvērtīgākās cenas\n\n'
-        '<b>Komandas</b>\n'
+        'Kā lietot botu\n\n'
+        '⛽ "Degviela" — nospied pogu, izvēlies degvielu un uzpildes punktu\n'
+        '💰 "Lētākais" — uzē vislabvērtīgākās cenas\n\n'
+        'Komandas:\n'
         '/fuel — visas cenas\n'
         '/best — lētākais katrai degvielai\n'
         '/price 95 — lētākā cena vienam degvielas veidam\n'
-        f'{provider_commands} — konkrēta uzȧēšanas vieta\n'
+        f'{provider_commands} — konkrēta uzpildes vieta\n'
         '/fav — saglabātie degvielas veidi\n'
         '/refresh — atjaunot cenas\n'
-        '/status — bota stāvoklis\n'
+        '/status — bota statuss\n'
         '/mode compact|full — skata veids'
     )
     return _append_credit(message, credit_message)
@@ -99,8 +99,8 @@ def format_help_text(enabled_providers: tuple[str, ...] | list[str], credit_mess
 def format_start_text(enabled_providers: tuple[str, ...] | list[str]) -> str:
     return (
         'Sveiki! 👋\n\n'
-        'Nospied ⛽ <b>Degviela</b>, lai apskatītu cenas,\n'
-        'vai uzreiz — 💰 <b>Lētākais</b>.\n\n'
+        'Nospied "⛽ Degviela", lai apskatītu cenas,\n'
+        'vai uzreiz — "💰 Lētākais".\n\n'
         'Palīdzība: /help'
     )
 
