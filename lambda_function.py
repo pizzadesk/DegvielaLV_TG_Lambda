@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime, timezone
 
 from telegram import Update
 from telegram.error import InvalidToken
@@ -31,7 +32,54 @@ async def _handle_update(update_data: dict):
     await app.process_update(update)
 
 
+def _run_scheduled_snapshot() -> None:
+    """Scrape prices and maintain current/previous S3 snapshots for price-diff display."""
+    from fuel_price_telegram_bot.scraper import scrape_fuel_prices
+    from fuel_price_telegram_bot.snapshot import read_snapshot, write_snapshot, prices_changed
+
+    try:
+        config = Config()
+    except ValueError as exc:
+        logger.error('Config error in scheduled snapshot: %s', exc)
+        return
+
+    bucket = config.S3_BUCKET_NAME
+    if not bucket:
+        logger.warning('S3_BUCKET_NAME not set; skipping scheduled snapshot')
+        return
+
+    fresh_prices = scrape_fuel_prices(config.TARGET_URL, enabled_sources=config.ENABLED_PROVIDERS)
+    if not fresh_prices:
+        logger.error('Scheduled scrape returned no data; skipping snapshot write')
+        return
+
+    now = datetime.now(timezone.utc).isoformat()
+    current_snapshot = read_snapshot(bucket, config.S3_CURRENT_KEY)
+    current_prices = current_snapshot.get('prices', []) if current_snapshot else []
+
+    if prices_changed(current_prices, fresh_prices):
+        # Prices changed: rotate current → previous, write new current.
+        if current_snapshot:
+            write_snapshot(bucket, config.S3_PREVIOUS_KEY, current_snapshot)
+        changed_at = now
+    else:
+        # Prices unchanged: preserve the original change timestamp.
+        changed_at = (current_snapshot or {}).get('changed_at', now)
+
+    write_snapshot(bucket, config.S3_CURRENT_KEY, {
+        'prices': fresh_prices,
+        'scraped_at': now,
+        'changed_at': changed_at,
+    })
+    logger.info('Scheduled snapshot written to s3://%s/%s', bucket, config.S3_CURRENT_KEY)
+
+
 def lambda_handler(event, context):
+    # EventBridge scheduled invocation (e.g. hourly price snapshot).
+    if event.get('source') == 'aws.events':
+        _run_scheduled_snapshot()
+        return {'statusCode': 200, 'body': 'OK: scheduled snapshot complete'}
+
     # Allow Lambda console test invocations that don't send Telegram webhook payloads.
     if "body" not in event:
         return {"statusCode": 200, "body": "OK: no webhook payload"}

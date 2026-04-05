@@ -57,6 +57,15 @@ def get_brand_name(source: str) -> str:
     return _BRAND_NAMES.get(source, source)
 
 
+def format_price_diff(delta: float | None) -> str:
+    """Return a short diff badge string, or empty string when there is no change."""
+    if not delta:  # covers None and 0.0
+        return ''
+    if delta > 0:
+        return f' ▲+{delta:.3f}'
+    return f' ▼{delta:.3f}'
+
+
 def _normalize_credit_message(credit_message: str | None) -> str:
     return credit_message.strip() if credit_message else ''
 
@@ -120,14 +129,17 @@ def normalize_fuel_query(fuel_query: str) -> str | None:
     return _FUEL_QUERY_ALIASES.get(normalized)
 
 
-def _footer(sources: list[str] | None = None, credit_message: str | None = None) -> str:
+def _footer(
+    sources: list[str] | None = None,
+    credit_message: str | None = None,
+    changed_at: 'datetime | None' = None,
+) -> str:
     source_list = sources or list(_SOURCE_HOSTS.values())
     now = datetime.now(_DISPLAY_TIMEZONE)
-    lines = [
-        f"🕒 Updated: {_format_display_time(now)}",
-        '',
-        f"🔗 Websites: {', '.join(source_list)}",
-    ]
+    lines = [f"🕒 Updated: {_format_display_time(now)}"]
+    if changed_at is not None:
+        lines.append(f"📅 Prices last changed: {_format_display_time(changed_at)}")
+    lines += ['', f"🔗 Websites: {', '.join(source_list)}"]
     credit = _normalize_credit_message(credit_message)
     if credit:
         lines.append(credit)
@@ -194,6 +206,8 @@ def format_message(
     data: list[dict],
     enabled_providers: tuple[str, ...] | list[str] | None = None,
     credit_message: str | None = None,
+    diffs: dict | None = None,
+    changed_at: 'datetime | None' = None,
 ) -> str:
     if not data:
         return _append_credit('⛽ Fuel prices are not available right now. Please try again in a moment.', credit_message)
@@ -208,14 +222,15 @@ def format_message(
             continue
 
         message += f"<b>🛢️ {fuel}</b>\n"
-        for idx, (_, name, raw_price, _) in enumerate(prices):
+        for idx, (_, name, raw_price, source) in enumerate(prices):
+            diff_str = format_price_diff(diffs.get((source, fuel)) if diffs is not None else None)
             if idx == 0:
-                message += f"<b>{name}: €{raw_price}</b> ⭐\n"
+                message += f"<b>{name}: €{raw_price}{diff_str}</b> ⭐\n"
             else:
-                message += f"{name}: €{raw_price}\n"
+                message += f"{name}: €{raw_price}{diff_str}\n"
         message += "\n"
 
-    message += _footer([_SOURCE_HOSTS[source] for source in active_providers], credit_message)
+    message += _footer([_SOURCE_HOSTS[source] for source in active_providers], credit_message, changed_at=changed_at)
     return message
 
 
@@ -223,6 +238,8 @@ def format_compact_message(
     data: list[dict],
     enabled_providers: tuple[str, ...] | list[str] | None = None,
     credit_message: str | None = None,
+    diffs: dict | None = None,
+    changed_at: 'datetime | None' = None,
 ) -> str:
     if not data:
         return _append_credit('⛽ Fuel prices are not available right now. Please try again in a moment.', credit_message)
@@ -237,12 +254,14 @@ def format_compact_message(
             continue
         found_any = True
         best = prices[0]
-        message += f"<b>{item.get('fuel', 'Unknown')}</b>: {best[1]} €{best[2]} ⭐\n"
+        fuel = item.get('fuel', 'Unknown')
+        diff_str = format_price_diff(diffs.get((best[3], fuel)) if diffs is not None else None)
+        message += f"<b>{fuel}</b>: {best[1]} €{best[2]}{diff_str} ⭐\n"
 
     if not found_any:
         return _append_credit('⛽ No enabled providers returned fuel prices.', credit_message)
 
-    message += '\n' + _footer([_SOURCE_HOSTS[source] for source in active_providers], credit_message)
+    message += '\n' + _footer([_SOURCE_HOSTS[source] for source in active_providers], credit_message, changed_at=changed_at)
     return message
 
 
@@ -251,6 +270,8 @@ def format_lowest_price(
     fuel_query: str,
     enabled_providers: tuple[str, ...] | list[str] | None = None,
     credit_message: str | None = None,
+    diffs: dict | None = None,
+    changed_at: 'datetime | None' = None,
 ) -> str:
     if not data:
         return _append_credit('⛽ Fuel prices are not available right now. Please try again in a moment.', credit_message)
@@ -269,12 +290,16 @@ def format_lowest_price(
         return _append_credit(f'❌ No prices available for {fuel_key} right now.', credit_message)
 
     best = prices[0]
+    diff_str = format_price_diff(diffs.get((best[3], fuel_key)) if diffs is not None else None)
+    changed_line = f"\n📅 Prices last changed: {_format_display_time(changed_at)}" if changed_at is not None else ''
     return _append_credit(
-        f"⛽ Cheapest price for <b>{fuel_key}</b>:\n\n"
-        f"<b>{best[1]}: €{best[2]}</b> ⭐\n\n"
-        f"Compared providers: {', '.join(get_brand_name(provider) for provider in active_providers)}\n"
-        f"🔗 Sources: {', '.join(_SOURCE_HOSTS[provider] for provider in active_providers)}\n"
-        .rstrip(),
+        (
+            f"⛽ Cheapest price for <b>{fuel_key}</b>:\n\n"
+            f"<b>{best[1]}: €{best[2]}{diff_str}</b> ⭐\n\n"
+            f"Compared providers: {', '.join(get_brand_name(provider) for provider in active_providers)}\n"
+            f"🔗 Sources: {', '.join(_SOURCE_HOSTS[provider] for provider in active_providers)}"
+            f"{changed_line}"
+        ).rstrip(),
         credit_message,
     )
 
@@ -283,6 +308,8 @@ def format_best_prices(
     data: list[dict],
     enabled_providers: tuple[str, ...] | list[str] | None = None,
     credit_message: str | None = None,
+    diffs: dict | None = None,
+    changed_at: 'datetime | None' = None,
 ) -> str:
     if not data:
         return _append_credit('⛽ Fuel prices are not available right now. Please try again in a moment.', credit_message)
@@ -296,15 +323,23 @@ def format_best_prices(
             continue
         found_any = True
         best = prices[0]
-        message += f"<b>{item.get('fuel', 'Unknown')}</b>: {best[1]} €{best[2]} ⭐\n"
+        fuel = item.get('fuel', 'Unknown')
+        diff_str = format_price_diff(diffs.get((best[3], fuel)) if diffs is not None else None)
+        message += f"<b>{fuel}</b>: {best[1]} €{best[2]}{diff_str} ⭐\n"
 
     if not found_any:
         return _append_credit('⛽ No enabled providers returned fuel prices.', credit_message)
 
-    return message + '\n' + _footer([_SOURCE_HOSTS[source] for source in active_providers], credit_message)
+    return message + '\n' + _footer([_SOURCE_HOSTS[source] for source in active_providers], credit_message, changed_at=changed_at)
 
 
-def format_provider_prices(data: list[dict], provider: str, credit_message: str | None = None) -> str:
+def format_provider_prices(
+    data: list[dict],
+    provider: str,
+    credit_message: str | None = None,
+    diffs: dict | None = None,
+    changed_at: 'datetime | None' = None,
+) -> str:
     if not data:
         return _append_credit('⛽ Fuel prices are not available right now. Please try again in a moment.', credit_message)
 
@@ -318,12 +353,14 @@ def format_provider_prices(data: list[dict], provider: str, credit_message: str 
         if not price:
             continue
         found_any = True
-        message += f"<b>{item.get('fuel', 'Unknown')}</b>: €{price}\n"
+        fuel = item.get('fuel', 'Unknown')
+        diff_str = format_price_diff(diffs.get((provider, fuel)) if diffs is not None else None)
+        message += f"<b>{fuel}</b>: €{price}{diff_str}\n"
 
     if not found_any:
         return _append_credit(f'❌ No prices available for {provider_name} right now.', credit_message)
 
-    return message + '\n' + _footer([host], credit_message)
+    return message + '\n' + _footer([host], credit_message, changed_at=changed_at)
 
 
 def format_status(status: dict, credit_message: str | None = None) -> str:

@@ -133,6 +133,29 @@ def _get_credit_message(context: ContextTypes.DEFAULT_TYPE) -> str:
     return _get_config(context).CREDIT_MESSAGE
 
 
+def _get_diff_context(
+    config: Config,
+    live_data: list[dict],
+) -> 'tuple[dict | None, object]':
+    """Return (diffs, changed_at) from S3 snapshots, or (None, None) if unavailable."""
+    if not config.S3_BUCKET_NAME:
+        return None, None
+    try:
+        from .snapshot import get_current_snapshot, get_previous_snapshot, compute_diffs
+        from datetime import datetime
+        cur = get_current_snapshot(config.S3_BUCKET_NAME, config.S3_CURRENT_KEY)
+        prev = get_previous_snapshot(config.S3_BUCKET_NAME, config.S3_PREVIOUS_KEY)
+        if cur is None or prev is None:
+            return None, None
+        diffs = compute_diffs(live_data, prev.get('prices', []))
+        changed_at_str = cur.get('changed_at')
+        changed_at = datetime.fromisoformat(changed_at_str) if changed_at_str else None
+        return diffs, changed_at
+    except Exception:
+        logger.exception('Failed to load snapshot diff context')
+        return None, None
+
+
 def _get_data(context: ContextTypes.DEFAULT_TYPE, force_refresh: bool = False) -> list[dict]:
     config = _get_config(context)
     return get_fuel_prices(
@@ -337,10 +360,11 @@ async def _run_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE, from_
         enabled_sources=config.ENABLED_PROVIDERS,
     )
     data = refresh_result.data
+    diffs, changed_at = _get_diff_context(config, data)
 
     if not refresh_result.refreshed:
         if data:
-            text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS)
+            text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS, diffs=diffs, changed_at=changed_at)
             message = '⚠️ Could not update prices now. Showing saved data.\n\n' + text
             if from_callback:
                 await _edit_callback_html(update, message, reply_markup=_shortcuts_markup())
@@ -354,7 +378,7 @@ async def _run_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE, from_
             await _reply_text(update, '⚠️ Could not update prices now. Please try again.', shortcuts=True)
         return
 
-    text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS)
+    text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS, diffs=diffs, changed_at=changed_at)
     message = '✅ Prices updated. ' + text
     if from_callback:
         await _edit_callback_html(update, message, reply_markup=_shortcuts_markup())
@@ -420,7 +444,9 @@ async def _provider_command(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         )
         return
 
-    text = format_provider_prices(_get_data(context), provider, config.CREDIT_MESSAGE)
+    data = _get_data(context)
+    diffs, changed_at = _get_diff_context(config, data)
+    text = format_provider_prices(data, provider, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
     await _reply_html(update, text, shortcuts=True)
 
 
@@ -429,21 +455,24 @@ def _format_fuel_view(
     context: ContextTypes.DEFAULT_TYPE,
     data: list[dict],
     enabled_providers: tuple[str, ...] | list[str],
+    diffs: dict | None = None,
+    changed_at=None,
 ) -> str:
     if _is_compact_mode(update, context):
-        return format_compact_message(data, enabled_providers, _get_credit_message(context))
-    return format_message(data, enabled_providers, _get_credit_message(context))
+        return format_compact_message(data, enabled_providers, _get_credit_message(context), diffs=diffs, changed_at=changed_at)
+    return format_message(data, enabled_providers, _get_credit_message(context), diffs=diffs, changed_at=changed_at)
 
 
 async def _send_fuel_view(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args
     config = _get_config(context)
     data = _get_data(context)
+    diffs, changed_at = _get_diff_context(config, data)
 
     if args:
-        text = format_lowest_price(data, args[0], config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE)
+        text = format_lowest_price(data, args[0], config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
     else:
-        text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS)
+        text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS, diffs=diffs, changed_at=changed_at)
 
     await _reply_html(update, text, shortcuts=True)
 
@@ -474,7 +503,9 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     config = _get_config(context)
     fuel_query = args[0]
-    text = format_lowest_price(_get_data(context), fuel_query, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE)
+    data = _get_data(context)
+    diffs, changed_at = _get_diff_context(config, data)
+    text = format_lowest_price(data, fuel_query, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
     await _reply_html(update, text, shortcuts=True)
 
 
@@ -552,7 +583,9 @@ async def favorite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def best(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config = _get_config(context)
-    text = format_best_prices(_get_data(context), config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE)
+    data = _get_data(context)
+    diffs, changed_at = _get_diff_context(config, data)
+    text = format_best_prices(data, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
     await _reply_html(update, text, shortcuts=True)
 
 
@@ -591,6 +624,7 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     action = query.data
     config = _get_config(context)
     data = _get_data(context)
+    diffs, changed_at = _get_diff_context(config, data)
 
     if action == f'{_CB_PREFIX}home':
         await _edit_callback_html(update, 'Choose what you want to do:', reply_markup=_shortcuts_markup())
@@ -640,7 +674,7 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
             return
 
-        text = format_lowest_price(data, fuel, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE)
+        text = format_lowest_price(data, fuel, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
         await _edit_callback_html(
             update,
             text,
@@ -664,7 +698,7 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
             return
 
-        text = format_message([row], config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE)
+        text = format_message([row], config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
         await _edit_callback_html(
             update,
             text,
@@ -694,7 +728,7 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await _edit_callback_html(update, '❌ This fuel is not available now.', reply_markup=_shortcuts_markup())
             return
 
-        text = format_provider_prices([row], provider, config.CREDIT_MESSAGE)
+        text = format_provider_prices([row], provider, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
         await _edit_callback_html(
             update,
             text,
@@ -735,11 +769,11 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     if action == f'{_CB_PREFIX}fuel':
-        await _edit_callback_html(update, _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS), reply_markup=_shortcuts_markup())
+        await _edit_callback_html(update, _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS, diffs=diffs, changed_at=changed_at), reply_markup=_shortcuts_markup())
         return
 
     if action == f'{_CB_PREFIX}best':
-        await _edit_callback_html(update, format_best_prices(_get_data(context), config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
+        await _edit_callback_html(update, format_best_prices(data, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at), reply_markup=_shortcuts_markup())
         return
 
     if action == f'{_CB_PREFIX}help':
@@ -755,11 +789,11 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     if action == f'{_CB_PREFIX}price:95':
-        await _edit_callback_html(update, format_lowest_price(_get_data(context), '95', config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
+        await _edit_callback_html(update, format_lowest_price(data, '95', config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at), reply_markup=_shortcuts_markup())
         return
 
     if action == f'{_CB_PREFIX}price:diesel':
-        await _edit_callback_html(update, format_lowest_price(_get_data(context), 'diesel', config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
+        await _edit_callback_html(update, format_lowest_price(data, 'diesel', config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at), reply_markup=_shortcuts_markup())
         return
 
 

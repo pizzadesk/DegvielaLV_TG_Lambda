@@ -12,6 +12,9 @@ class Config:
         self.TARGET_URL = os.getenv('TARGET_URL', 'https://www.circlek.lv/degviela-miles/degvielas-cenas')
         self.ENABLED_PROVIDERS = self._parse_enabled_providers(os.getenv('ENABLED_PROVIDERS'))
         self.CREDIT_MESSAGE = self._parse_credit_message(os.getenv('CREDIT_MESSAGE'))
+        self.S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+        self.S3_CURRENT_KEY = os.getenv('S3_CURRENT_KEY', 'prices/current.json')
+        self.S3_PREVIOUS_KEY = os.getenv('S3_PREVIOUS_KEY', 'prices/previous.json')
 
         if not self.TELEGRAM_TOKEN:
             raise ValueError('TELEGRAM_TOKEN must be set in .env file')
