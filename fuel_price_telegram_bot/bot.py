@@ -165,6 +165,34 @@ def _get_data(context: ContextTypes.DEFAULT_TYPE, force_refresh: bool = False) -
     )
 
 
+def _get_display_data(
+    context: ContextTypes.DEFAULT_TYPE,
+) -> 'tuple[list[dict], dict | None, object]':
+    """
+    Return (prices, diffs, changed_at) for display.
+
+    Tries S3 current.json first (fast, consistent diffs against previous.json).
+    Falls back to a live scrape + snapshot diffs if S3 data is missing or stale.
+    """
+    config = _get_config(context)
+    if config.S3_BUCKET_NAME:
+        try:
+            from .snapshot import get_snapshot_data
+            result = get_snapshot_data(
+                config.S3_BUCKET_NAME,
+                config.S3_CURRENT_KEY,
+                config.S3_PREVIOUS_KEY,
+            )
+            if result is not None:
+                return result
+        except Exception:
+            logger.exception('Failed to load display data from S3; falling back to live scrape')
+
+    data = _get_data(context)
+    diffs, changed_at = _get_diff_context(config, data)
+    return data, diffs, changed_at
+
+
 def _get_reply_message(update: Update):
     message = update.effective_message
     if message is None:
@@ -444,8 +472,7 @@ async def _provider_command(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         )
         return
 
-    data = _get_data(context)
-    diffs, changed_at = _get_diff_context(config, data)
+    data, diffs, changed_at = _get_display_data(context)
     text = format_provider_prices(data, provider, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
     await _reply_html(update, text, shortcuts=True)
 
@@ -466,8 +493,7 @@ def _format_fuel_view(
 async def _send_fuel_view(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args
     config = _get_config(context)
-    data = _get_data(context)
-    diffs, changed_at = _get_diff_context(config, data)
+    data, diffs, changed_at = _get_display_data(context)
 
     if args:
         text = format_lowest_price(data, args[0], config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
@@ -503,8 +529,7 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     config = _get_config(context)
     fuel_query = args[0]
-    data = _get_data(context)
-    diffs, changed_at = _get_diff_context(config, data)
+    data, diffs, changed_at = _get_display_data(context)
     text = format_lowest_price(data, fuel_query, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
     await _reply_html(update, text, shortcuts=True)
 
@@ -583,8 +608,7 @@ async def favorite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def best(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config = _get_config(context)
-    data = _get_data(context)
-    diffs, changed_at = _get_diff_context(config, data)
+    data, diffs, changed_at = _get_display_data(context)
     text = format_best_prices(data, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at)
     await _reply_html(update, text, shortcuts=True)
 
@@ -623,8 +647,7 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
     action = query.data
     config = _get_config(context)
-    data = _get_data(context)
-    diffs, changed_at = _get_diff_context(config, data)
+    data, diffs, changed_at = _get_display_data(context)
 
     if action == f'{_CB_PREFIX}home':
         await _edit_callback_html(update, 'Choose what you want to do:', reply_markup=_shortcuts_markup())

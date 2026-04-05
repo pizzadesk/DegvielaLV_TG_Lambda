@@ -126,3 +126,52 @@ def get_previous_snapshot(bucket: str, key: str) -> dict | None:
     _cached_previous = snapshot
     _previous_cache_expires_at = now + timedelta(seconds=_CACHE_TTL_SECONDS)
     return snapshot
+
+
+_SNAPSHOT_MAX_AGE_SECONDS = 10800  # 3 hours — fall back to live scrape beyond this
+
+
+def get_snapshot_data(
+    bucket: str,
+    current_key: str,
+    previous_key: str,
+    max_age_seconds: int = _SNAPSHOT_MAX_AGE_SECONDS,
+) -> 'tuple[list[dict], dict | None, datetime | None] | None':
+    """
+    Return (prices, diffs, changed_at) sourced entirely from S3 snapshots.
+
+    Returns None if current.json is missing or older than max_age_seconds,
+    so the caller can fall back to a live scrape.
+    Diffs compare current.json prices against previous.json prices.
+    """
+    cur = get_current_snapshot(bucket, current_key)
+    if cur is None:
+        return None
+
+    scraped_at_str = cur.get('scraped_at')
+    if scraped_at_str:
+        try:
+            scraped_at = datetime.fromisoformat(scraped_at_str)
+            age = (datetime.now(tz=timezone.utc) - scraped_at).total_seconds()
+            if age > max_age_seconds:
+                logger.warning('current.json is %.0f seconds old; falling back to live scrape', age)
+                return None
+        except Exception:
+            pass
+
+    prices = cur.get('prices', [])
+    if not prices:
+        return None
+
+    changed_at_str = cur.get('changed_at')
+    changed_at: datetime | None = None
+    if changed_at_str:
+        try:
+            changed_at = datetime.fromisoformat(changed_at_str)
+        except Exception:
+            pass
+
+    prev = get_previous_snapshot(bucket, previous_key)
+    diffs = compute_diffs(prices, prev.get('prices', [])) if prev else None
+
+    return prices, diffs, changed_at
