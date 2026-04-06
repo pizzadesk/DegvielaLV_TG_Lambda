@@ -118,7 +118,7 @@ def _footer(
     now = datetime.now(_DISPLAY_TIMEZONE)
     lines = [f"🕒 Ziņa atjaunota: {_format_display_time(now)}"]
     if changed_at is not None:
-        lines.append(f"📅 Cenas mainījās: {_format_display_time(changed_at)}")
+        lines.append(f"📅 Cenas no: {_format_display_time(changed_at)}")
     lines += ['', f"🔗 {' · '.join(source_list)}"]
     credit = _normalize_credit_message(credit_message)
     if credit:
@@ -271,7 +271,7 @@ def format_lowest_price(
 
     best = prices[0]
     diff_str = format_price_diff(diffs.get((best[3], fuel_key)) if diffs is not None else None)
-    changed_line = f"\n📅 Cenas mainījās: {_format_display_time(changed_at)}" if changed_at is not None else ''
+    changed_line = f"\n📅 Cenas no: {_format_display_time(changed_at)}" if changed_at is not None else ''
     return _append_credit(
         (
             f"⛽ <b>{fuel_key}</b> — lētākais\n\n"

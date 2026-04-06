@@ -4,10 +4,25 @@ from dotenv import load_dotenv
 
 _ALL_PROVIDERS = ('circlek', 'neste', 'virsi', 'viada')
 _DEFAULT_CREDIT_MESSAGE = '☕ Ja noderēja, kafijai. Ja ne, nu neko: buymeacoffee.com/pizzadesk'
+_DOTENV_LOADED = False
+
+
+def _load_env_once(env_path: str | None = None) -> None:
+    global _DOTENV_LOADED
+    if _DOTENV_LOADED:
+        return
+
+    # Lambda uses process environment; parse .env only in local/dev unless explicit path is provided.
+    if env_path is None and os.getenv('AWS_EXECUTION_ENV'):
+        _DOTENV_LOADED = True
+        return
+
+    load_dotenv(dotenv_path=env_path)
+    _DOTENV_LOADED = True
 
 class Config:
     def __init__(self, env_path: str | None = None):
-        load_dotenv(dotenv_path=env_path)
+        _load_env_once(env_path)
         self.TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
         self.TARGET_URL = os.getenv('TARGET_URL', 'https://www.circlek.lv/degviela-miles/degvielas-cenas')
         self.ENABLED_PROVIDERS = self._parse_enabled_providers(os.getenv('ENABLED_PROVIDERS'))

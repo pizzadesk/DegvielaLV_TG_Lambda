@@ -1,7 +1,9 @@
 param(
     [string]$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")),
     [string]$OutputZip = "lambda-deployment.zip",
-    [string]$PythonExe = "python"
+    [string]$PythonExe = "python",
+    [switch]$IncludeBoto3,
+    [switch]$UpgradePip
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,8 +39,11 @@ $previousPipUser = $env:PIP_USER
 $env:PIP_USER = '0'
 
 try {
-    Invoke-External $PythonExe -m pip install --upgrade pip
-    Invoke-External $PythonExe -m pip install -r (Join-Path $ProjectRoot "requirements.txt") -t $buildDir
+    if ($UpgradePip) {
+        Invoke-External $PythonExe -m pip install --upgrade pip
+    }
+
+    Invoke-External $PythonExe -m pip install --disable-pip-version-check --no-compile -r (Join-Path $ProjectRoot "requirements.txt") -t $buildDir
 }
 finally {
     if ($null -eq $previousPipUser) {
@@ -48,6 +53,15 @@ finally {
         $env:PIP_USER = $previousPipUser
     }
 }
+
+if (-not $IncludeBoto3) {
+    foreach ($name in @('boto3', 'botocore', 's3transfer', 'jmespath')) {
+        Get-ChildItem -Path $buildDir -Filter "$name*" -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Get-ChildItem -Path $buildDir -Directory -Filter "__pycache__" -Recurse -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+Get-ChildItem -Path $buildDir -File -Include "*.pyc", "*.pyo" -Recurse -Force | Remove-Item -Force -ErrorAction SilentlyContinue
 
 foreach ($requiredPath in @('telegram', 'requests', 'bs4')) {
     if (-not (Test-Path (Join-Path $buildDir $requiredPath))) {

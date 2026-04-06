@@ -1,4 +1,5 @@
 import re
+import os
 import logging
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -43,9 +44,25 @@ _BRAND_NAMES = {
     'virsi': 'Virsi',
     'viada': 'Viada',
 }
-_CACHE_TTL_SECONDS = 1800
-_REQUEST_TIMEOUT = (2, 4)
-_MAX_SCRAPE_WORKERS = 4
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+_CACHE_TTL_SECONDS = _env_int('SCRAPER_CACHE_TTL_SECONDS', 1800)
+_REQUEST_TIMEOUT = (
+    _env_int('SCRAPER_CONNECT_TIMEOUT_SECONDS', 2),
+    _env_int('SCRAPER_READ_TIMEOUT_SECONDS', 4),
+)
+_MAX_SCRAPE_WORKERS = _env_int('SCRAPER_MAX_WORKERS', 4)
 
 
 @dataclass(frozen=True)
@@ -276,6 +293,9 @@ def _scrape_all_sources(
 
     rows: dict[str, dict] = {}
     active_sources = get_enabled_sources(enabled_sources)
+    if not active_sources:
+        return []
+
     source_scrapers = {
         'circlek': _scrape_circlek,
         'neste': _scrape_neste,

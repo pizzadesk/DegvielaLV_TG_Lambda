@@ -10,11 +10,21 @@ _cached_current: dict | None = None
 _current_cache_expires_at: datetime = datetime.fromtimestamp(0, tz=timezone.utc)
 _cached_previous: dict | None = None
 _previous_cache_expires_at: datetime = datetime.fromtimestamp(0, tz=timezone.utc)
+_cached_s3_client = None
 
 
 def _s3_client():
-    import boto3  # noqa: PLC0415 — lazy import keeps boto3 optional in local dev
-    return boto3.client('s3')
+    global _cached_s3_client
+    if _cached_s3_client is not None:
+        return _cached_s3_client
+
+    try:
+        import boto3  # noqa: PLC0415 — lazy import keeps boto3 optional in local dev
+    except ImportError as exc:
+        raise RuntimeError('boto3 is required for S3 snapshot access') from exc
+
+    _cached_s3_client = boto3.client('s3')
+    return _cached_s3_client
 
 
 def _is_missing_or_unavailable_snapshot(exc: Exception) -> bool:

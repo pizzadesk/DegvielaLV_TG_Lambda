@@ -116,7 +116,7 @@ Note: `/ping` and `/status` are internal diagnostics commands and are disabled f
 
 **Refresh cooldown:** 45 seconds per chat, 20 seconds globally. Tapping 🔄 Atjaunot too quickly shows a countdown message instead of triggering a redundant scrape.
 
-**S3 snapshot refresh:** When EventBridge is configured, prices are fetched from the S3 snapshot (written by the scheduled Lambda trigger) rather than scraped live on every user request. The webhook Lambda falls back to a live scrape only if the snapshot is missing or older than 3 hours.
+**S3 snapshot refresh:** When EventBridge is configured, prices are fetched from the S3 snapshot (written by the scheduled Lambda trigger) rather than scraped live on every user request. Scheduled updates support EventBridge Rule and Scheduler payload variants (including empty no-body scheduler events). The webhook Lambda falls back to a live scrape only if the snapshot is missing or older than 3 hours.
 
 ---
 

@@ -45,7 +45,7 @@ The repository is usable as-is for the included providers, but it is also struct
 ### EventBridge scheduled trigger (background)
 
 1. EventBridge fires the Lambda on your configured schedule (recommended: every 30–60 minutes).
-2. `lambda_function.py` detects `event.source == 'aws.events'` and calls `_run_scheduled_snapshot()`.
+2. `lambda_function.py` detects scheduled invocations from EventBridge Rule and EventBridge Scheduler payloads (including `aws.events`, `aws.scheduler`, and empty no-body scheduler events) and calls `_run_scheduled_snapshot()`.
 3. All providers are scraped in parallel.
 4. Scraped prices are compared to `current.json`. If any price changed, `current.json` is rotated to `previous.json` and new data is written as `current.json` with an updated `changed_at` timestamp. If prices are unchanged only `scraped_at` is updated.
 
@@ -63,6 +63,10 @@ Set these in AWS Lambda or a local `.env` file.
 | `S3_BUCKET_NAME` | No | S3 bucket name used for price snapshots. When unset the diff/change feature is disabled and the bot falls back to live scraping only. |
 | `S3_CURRENT_KEY` | No | S3 key for the current price snapshot. Defaults to `prices/current.json`. |
 | `S3_PREVIOUS_KEY` | No | S3 key for the previous price snapshot used for diff computation. Defaults to `prices/previous.json`. |
+| `SCRAPER_CACHE_TTL_SECONDS` | No | In-memory scrape cache TTL in seconds. Defaults to `1800`. |
+| `SCRAPER_CONNECT_TIMEOUT_SECONDS` | No | HTTP connect timeout for scraping requests in seconds. Defaults to `2`. |
+| `SCRAPER_READ_TIMEOUT_SECONDS` | No | HTTP read timeout for scraping requests in seconds. Defaults to `4`. |
+| `SCRAPER_MAX_WORKERS` | No | Maximum parallel scrape worker threads. Defaults to `4`. |
 
 ### Default credit message
 
@@ -113,6 +117,12 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
+If you need to test S3 snapshot features locally, install AWS SDK separately:
+
+```bash
+pip install boto3
+```
+
 Optional local `.env` example:
 
 ```text
@@ -137,6 +147,18 @@ Create the deployment zip with:
 ```
 
 The script outputs `lambda-deployment.zip` in the repository root.
+
+Build script defaults are optimized for Lambda cold starts:
+
+- skips pip upgrade unless explicitly requested,
+- installs without bytecode compilation,
+- excludes `boto3`/`botocore` from the zip by default (Lambda runtime already includes AWS SDK).
+
+Optional flags:
+
+```powershell
+./scripts/build_lambda_zip.ps1 -IncludeBoto3 -UpgradePip
+```
 
 ## Bot capabilities
 
@@ -195,10 +217,10 @@ Example IAM policy (replace bucket name/prefix as needed):
 
 ## Lambda responses
 
-- `200 OK`: update accepted or console test without a webhook payload.
+- `200 OK`: Telegram update accepted or scheduled snapshot completed successfully.
 - `400 Bad Request`: invalid JSON or empty request body.
 - `403 Forbidden`: webhook secret mismatch.
-- `500 Internal Server Error`: invalid token, invalid configuration, or runtime failure.
+- `500 Internal Server Error`: invalid token, invalid configuration, or scheduled snapshot failure (`body` includes a structured failure reason).
 
 ## CI and release notes
 

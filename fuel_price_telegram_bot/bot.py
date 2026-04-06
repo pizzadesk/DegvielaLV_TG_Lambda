@@ -61,6 +61,14 @@ def _find_fuel_by_key(data: list[dict], fuel_key: str) -> str | None:
     return None
 
 
+def _fuel_key_map(data: list[dict]) -> dict[str, str]:
+    return {_fuel_to_key(fuel): fuel for fuel in _available_fuels(data)}
+
+
+def _find_fuel_by_key_map(mapping: dict[str, str], fuel_key: str) -> str | None:
+    return mapping.get(fuel_key)
+
+
 def _is_compact_chat(update: Update) -> bool:
     chat = update.effective_chat
     return bool(chat and chat.type in {'group', 'supergroup', 'channel'})
@@ -647,11 +655,21 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
     action = query.data
     config = _get_config(context)
-    data, diffs, changed_at = _get_display_data(context)
 
     if action == f'{_CB_PREFIX}home':
         await _edit_callback_html(update, 'Izvēlies darbību:', reply_markup=_shortcuts_markup())
         return
+
+    if action == f'{_CB_PREFIX}help':
+        await _edit_callback_text(update, format_help_text(config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
+        return
+
+    if action == f'{_CB_PREFIX}refresh':
+        await _run_refresh(update, context, from_callback=True)
+        return
+
+    data, diffs, changed_at = _get_display_data(context)
+    key_map = _fuel_key_map(data)
 
     if action == f'{_CB_PREFIX}fuelmenu':
         if not data:
@@ -670,7 +688,7 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if action.startswith(f'{_CB_PREFIX}fuelsel:'):
         fuel_key = action.split(':', 2)[2]
-        fuel = _find_fuel_by_key(data, fuel_key)
+        fuel = _find_fuel_by_key_map(key_map, fuel_key)
         if fuel is None:
             await _edit_callback_html(
                 update,
@@ -692,7 +710,7 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if action.startswith(f'{_CB_PREFIX}fuelbest:'):
         fuel_key = action.split(':', 2)[2]
-        fuel = _find_fuel_by_key(data, fuel_key)
+        fuel = _find_fuel_by_key_map(key_map, fuel_key)
         if fuel is None:
             await _edit_callback_html(update, '❌ Nevaru atrast šo degvielas veidu šim tirgotājam. Mēģini citu.', reply_markup=_shortcuts_markup())
             return
@@ -711,7 +729,7 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if action.startswith(f'{_CB_PREFIX}fuelall:'):
         fuel_key = action.split(':', 2)[2]
-        fuel = _find_fuel_by_key(data, fuel_key)
+        fuel = _find_fuel_by_key_map(key_map, fuel_key)
         if fuel is None:
             await _edit_callback_html(update, '❌ Nevaru atrast šo degvielas veidu šim tirgotājam. Mēģini citu.', reply_markup=_shortcuts_markup())
             return
@@ -741,7 +759,7 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         provider = parts[2]
         fuel_key = parts[3]
-        fuel = _find_fuel_by_key(data, fuel_key)
+        fuel = _find_fuel_by_key_map(key_map, fuel_key)
         if fuel is None:
             await _edit_callback_html(update, '❌ Nevaru atrast šo degvielas veidu šim tirgotājam. Mēģini citu.', reply_markup=_shortcuts_markup())
             return
@@ -765,7 +783,7 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if action.startswith(f'{_CB_PREFIX}favtoggle:'):
         fuel_key = action.split(':', 2)[2]
-        fuel = _find_fuel_by_key(data, fuel_key)
+        fuel = _find_fuel_by_key_map(key_map, fuel_key)
         if fuel is None:
             await _edit_callback_html(update, '❌ Nevaru atrast šo degvielas veidu šim tirgotājam. Mēģini citu.', reply_markup=_shortcuts_markup())
             return
@@ -799,16 +817,8 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _edit_callback_html(update, format_best_prices(data, config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE, diffs=diffs, changed_at=changed_at), reply_markup=_shortcuts_markup())
         return
 
-    if action == f'{_CB_PREFIX}help':
-        await _edit_callback_text(update, format_help_text(config.ENABLED_PROVIDERS, config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
-        return
-
     if action == f'{_CB_PREFIX}status':
         await _edit_callback_html(update, format_status(get_scrape_status(config.ENABLED_PROVIDERS), config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
-        return
-
-    if action == f'{_CB_PREFIX}refresh':
-        await _run_refresh(update, context, from_callback=True)
         return
 
     if action == f'{_CB_PREFIX}price:95':
