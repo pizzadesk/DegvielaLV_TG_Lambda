@@ -5,7 +5,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 from .config import Config
-from .scraper import get_fuel_prices, get_scrape_status, refresh_fuel_prices
 from .formatter import (
     format_compact_message,
     format_best_prices,
@@ -13,8 +12,8 @@ from .formatter import (
     format_lowest_price,
     format_message,
     format_provider_prices,
+    format_snapshot_status,
     format_start_text,
-    format_status,
     get_brand_name,
     normalize_fuel_query,
 )
@@ -141,64 +140,32 @@ def _get_credit_message(context: ContextTypes.DEFAULT_TYPE) -> str:
     return _get_config(context).CREDIT_MESSAGE
 
 
-def _get_diff_context(
-    config: Config,
-    live_data: list[dict],
-) -> 'tuple[dict | None, object]':
-    """Return (diffs, changed_at) from S3 snapshots, or (None, None) if unavailable."""
-    if not config.S3_BUCKET_NAME:
-        return None, None
-    try:
-        from .snapshot import get_current_snapshot, get_previous_snapshot, compute_diffs
-        from datetime import datetime
-        cur = get_current_snapshot(config.S3_BUCKET_NAME, config.S3_CURRENT_KEY)
-        prev = get_previous_snapshot(config.S3_BUCKET_NAME, config.S3_PREVIOUS_KEY)
-        if cur is None or prev is None:
-            return None, None
-        diffs = compute_diffs(live_data, prev.get('prices', []))
-        changed_at_str = cur.get('changed_at')
-        changed_at = datetime.fromisoformat(changed_at_str) if changed_at_str else None
-        return diffs, changed_at
-    except Exception:
-        logger.exception('Failed to load snapshot diff context')
-        return None, None
-
-
-def _get_data(context: ContextTypes.DEFAULT_TYPE, force_refresh: bool = False) -> list[dict]:
-    config = _get_config(context)
-    return get_fuel_prices(
-        config.TARGET_URL,
-        force_refresh=force_refresh,
-        enabled_sources=config.ENABLED_PROVIDERS,
-    )
-
-
 def _get_display_data(
     context: ContextTypes.DEFAULT_TYPE,
 ) -> 'tuple[list[dict], dict | None, object]':
     """
-    Return (prices, diffs, changed_at) for display.
+    Return (prices, diffs, changed_at) sourced exclusively from S3 snapshots.
 
-    Tries S3 current.json first (fast, consistent diffs against previous.json).
-    Falls back to a live scrape + snapshot diffs if S3 data is missing or stale.
+    Reads current.json for prices and changed_at, computes diffs against previous.json.
+    Returns an empty tuple when S3 is unavailable or not configured.
     """
     config = _get_config(context)
-    if config.S3_BUCKET_NAME:
-        try:
-            from .snapshot import get_snapshot_data
-            result = get_snapshot_data(
-                config.S3_BUCKET_NAME,
-                config.S3_CURRENT_KEY,
-                config.S3_PREVIOUS_KEY,
-            )
-            if result is not None:
-                return result
-        except Exception:
-            logger.exception('Failed to load display data from S3; falling back to live scrape')
-
-    data = _get_data(context)
-    diffs, changed_at = _get_diff_context(config, data)
-    return data, diffs, changed_at
+    if not config.S3_BUCKET_NAME:
+        return [], None, None
+    try:
+        from .snapshot import get_current_snapshot, get_previous_snapshot, compute_diffs
+        cur = get_current_snapshot(config.S3_BUCKET_NAME, config.S3_CURRENT_KEY)
+        if cur is None:
+            return [], None, None
+        prices = cur.get('prices', [])
+        prev = get_previous_snapshot(config.S3_BUCKET_NAME, config.S3_PREVIOUS_KEY)
+        diffs = compute_diffs(prices, prev.get('prices', [])) if prev else None
+        changed_at_str = cur.get('changed_at')
+        changed_at = datetime.fromisoformat(changed_at_str) if changed_at_str else None
+        return prices, diffs, changed_at
+    except Exception:
+        logger.exception('Failed to load display data from S3')
+        return [], None, None
 
 
 def _get_reply_message(update: Update):
@@ -390,28 +357,17 @@ async def _run_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE, from_
 
     _set_refresh_tracker(context, chat_id, now)
 
+    from .snapshot import invalidate_snapshot_cache
+    invalidate_snapshot_cache()
+
     config = _get_config(context)
-    refresh_result = refresh_fuel_prices(
-        config.TARGET_URL,
-        enabled_sources=config.ENABLED_PROVIDERS,
-    )
-    data = refresh_result.data
-    diffs, changed_at = _get_diff_context(config, data)
+    data, diffs, changed_at = _get_display_data(context)
 
-    if not refresh_result.refreshed:
-        if data:
-            text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS, diffs=diffs, changed_at=changed_at)
-            message = '⚠️ Datus neizdevās atjaunot. Rādu iepriekš ielādētās cenas.\n\n' + text
-            if from_callback:
-                await _edit_callback_html(update, message, reply_markup=_shortcuts_markup())
-            else:
-                await _reply_html(update, message, shortcuts=True)
-            return
-
+    if not data:
         if from_callback:
-            await _edit_callback_html(update, '⚠️ Datus neizdevās atjaunot. Mēģini vēlreiz pēc brīža.', reply_markup=_shortcuts_markup())
+            await _edit_callback_html(update, '⚠️ Dati nav pieejami. Mēģini vēlreiz pēc brīža.', reply_markup=_shortcuts_markup())
         else:
-            await _reply_text(update, '⚠️ Datus neizdevās atjaunot. Mēģini vēlreiz pēc brīža.', shortcuts=True)
+            await _reply_text(update, '⚠️ Dati nav pieejami. Mēģini vēlreiz pēc brīža.', shortcuts=True)
         return
 
     text = _format_fuel_view(update, context, data, config.ENABLED_PROVIDERS, diffs=diffs, changed_at=changed_at)
@@ -574,7 +530,7 @@ async def favorite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     args = context.args
     chat_id = _get_chat_id(update)
     favorites = _get_favorites(context, chat_id)
-    data = _get_data(context)
+    data, _, _ = _get_display_data(context)
 
     if not args or args[0].lower() == 'list':
         if not favorites:
@@ -639,7 +595,14 @@ async def viada(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config = _get_config(context)
-    text = format_status(get_scrape_status(config.ENABLED_PROVIDERS), config.CREDIT_MESSAGE)
+    snapshot = None
+    if config.S3_BUCKET_NAME:
+        try:
+            from .snapshot import get_current_snapshot
+            snapshot = get_current_snapshot(config.S3_BUCKET_NAME, config.S3_CURRENT_KEY)
+        except Exception:
+            logger.exception('Failed to load snapshot for status')
+    text = format_snapshot_status(snapshot, config.CREDIT_MESSAGE)
     await _reply_html(update, text, shortcuts=True)
 
 
@@ -818,7 +781,14 @@ async def shortcuts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     if action == f'{_CB_PREFIX}status':
-        await _edit_callback_html(update, format_status(get_scrape_status(config.ENABLED_PROVIDERS), config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
+        snapshot = None
+        if config.S3_BUCKET_NAME:
+            try:
+                from .snapshot import get_current_snapshot
+                snapshot = get_current_snapshot(config.S3_BUCKET_NAME, config.S3_CURRENT_KEY)
+            except Exception:
+                logger.exception('Failed to load snapshot for status callback')
+        await _edit_callback_html(update, format_snapshot_status(snapshot, config.CREDIT_MESSAGE), reply_markup=_shortcuts_markup())
         return
 
     if action == f'{_CB_PREFIX}price:95':
