@@ -1,6 +1,6 @@
 # Telegram Bot — Command Reference
 
-Prices are scraped from **Circle K**, **Neste**, **Virsi**, and **Viada** (Latvia).
+Prices are scraped from **Circle K**, **Neste**, **Virsi**, and **Viada** (Latvia). All prices are in **EUR (€)** and timestamps are shown in **Europe/Riga** time.
 
 ---
 
@@ -10,28 +10,37 @@ Most bot messages include a row of inline buttons — no slash commands needed f
 
 | Button | What it does |
 |---|---|
-| ⛽ **Fuel Menu** | Opens a fuel list → pick one → choose Best / All providers / single provider |
-| 📉 **Cheapest** | Cheapest provider for every fuel type in one view |
-| **95** / **Diesel** | Cheapest price for that fuel, instantly |
-| ❓ **Help** | Shows this info inside the chat |
-| 🔄 **Refresh** | Forces a data refresh (subject to cooldown) |
-| 📊 **Status** | Shows cache health and last scrape result per provider |
+| ⛽ **Degviela** | Opens a fuel list → pick one → choose Cheapest / All stations / single station |
+| 💰 **Lētākais** | Cheapest provider for every fuel type in one view |
+| **95** / **Diesel** / **LPG** | Cheapest price for that fuel, instantly |
+| ❓ **Palīdzība** | Shows help info inside the chat |
+| 🔄 **Atjaunot** | Forces a data refresh (subject to cooldown) |
 
-### Fuel Menu flow
+### Fuel menu flow
 
 ```
-⛽ Fuel Menu
-  └─ pick a fuel (95, Diesel, LPG, …)
-       └─ 📉 Cheapest for this fuel   — cheapest single provider
-          ⛽ All providers         — all providers side by side
-          Circle K / Neste / …    — one specific provider
-          ⭐ Add / Remove favorite — pin this fuel to the top of the menu
-          🔙 Fuel list / 🏠 Home  — navigate back
+⛽ Degviela
+  └─ izvēlies degvielu (95, Diesel, LPG, …)
+       └─ 💰 Lētākais      — cheapest single provider
+          ⛽ Visas stacijas — all providers side by side
+          Circle K / Neste / … — one specific provider
+          ⭐ Saglabāt / Noņemt — pin this fuel to the top of the menu
+          ← Degviela / 🏠 Sākums — navigate back
 ```
 
 Fuel list order: **95 → 95 Premium → 98 → Diesel → Diesel Premium → XTL → LPG → CNG → E85**
 
 Favorites appear first in the list, marked with ⭐.
+
+### Price change indicators
+
+All price views show ▲/▼ indicators next to prices that have changed since the last detected price update:
+
+```
+Diesel: Circle K €1.459 ▼ 0.010 ⭐
+```
+
+The footer shows `📅 Mainījās: šodien 09:15` — the exact time prices last changed. This feature requires the S3 snapshot setup described in README.md.
 
 ---
 
@@ -102,12 +111,12 @@ Example: `/fav add diesel`
 | Command | Output |
 |---|---|
 | `/refresh` | Force-refresh scraped data, shows updated prices |
-| `/status` | Cache TTL, last refresh timestamps, per-provider scrape health |
-| `/ping` | Returns `pong` — quick health check |
 
-**Refresh cooldown:** 45 seconds per chat, 20 seconds globally. Tapping 🔄 Refresh too quickly shows a countdown message instead of triggering a redundant scrape.
+Note: `/ping` and `/status` are internal diagnostics commands and are disabled for public users by default.
 
-**Cache TTL:** 30 minutes — aligned with provider websites which update prices approximately hourly.
+**Refresh cooldown:** 45 seconds per chat, 20 seconds globally. Tapping 🔄 Atjaunot too quickly shows a countdown message instead of triggering a redundant scrape.
+
+**S3 snapshot refresh:** When EventBridge is configured, prices are fetched from the S3 snapshot (written by the scheduled Lambda trigger) rather than scraped live on every user request. Scheduled updates support EventBridge Rule and Scheduler payload variants (including empty no-body scheduler events). The webhook Lambda falls back to a live scrape only if the snapshot is missing or older than 3 hours.
 
 ---
 
@@ -120,15 +129,14 @@ Example: `/fav add diesel`
 - The footer credit/support text comes from the `CREDIT_MESSAGE` environment variable.
 - If `CREDIT_MESSAGE` is unset, the built-in default support line is used.
 - If `CREDIT_MESSAGE` is set to an empty string, the footer credit is omitted.
-- `/ping` returns plain `pong` without shortcut buttons.
 - If a provider is disabled, provider command replies are plain text without shortcut buttons.
 
 ## Error behaviour
 
 | Situation | What you see |
 |---|---|
-| Unknown fuel alias | Usage hint with supported aliases |
-| No data available | Inline error with prompt to tap 🔄 Refresh |
+| Unknown fuel alias | Usage hint with example (`/price diesel`) |
+| No data available | Inline error with prompt to tap 🔄 Atjaunot |
 | Refresh failed but cache exists | Warning + cached prices shown |
 | Refresh failed, no cache | Warning, prompt to try again |
 | Internal error during inline action | Error shown in-place, shortcuts remain visible |

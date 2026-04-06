@@ -9,8 +9,9 @@ The repository is usable as-is for the included providers, but it is also struct
 - Scrapes prices from Circle K, Neste, Virsi, and Viada.
 - Normalizes fuel names across providers into a consistent set.
 - Serves Telegram commands and inline-button flows for browsing fuel prices.
+- Stores price snapshots in S3 and rotates them when prices change, enabling price-change indicators (▲/▼) on all views.
 - Caches results in memory to reduce repeated scraping.
-- Runs behind an AWS Lambda webhook endpoint.
+- Runs behind an AWS Lambda webhook endpoint; a second EventBridge trigger refreshes the S3 snapshot on a schedule.
 - Supports deployment-time customization through environment variables.
 
 ## Supported providers
@@ -22,21 +23,31 @@ The repository is usable as-is for the included providers, but it is also struct
 
 ## Project layout
 
-- `lambda_function.py`: AWS Lambda webhook entrypoint.
+- `lambda_function.py`: AWS Lambda entrypoint — handles both Telegram webhook updates and EventBridge scheduled snapshot triggers.
 - `fuel_price_telegram_bot/config.py`: environment-driven runtime configuration.
 - `fuel_price_telegram_bot/scraper.py`: scraping, normalization, and cache management.
-- `fuel_price_telegram_bot/formatter.py`: user-facing message formatting.
+- `fuel_price_telegram_bot/snapshot.py`: S3 snapshot read/write, price-change detection, and diff computation.
+- `fuel_price_telegram_bot/formatter.py`: user-facing message formatting including price-change indicators.
 - `fuel_price_telegram_bot/bot.py`: Telegram handlers, callbacks, and application setup.
 - `scripts/build_lambda_zip.ps1`: deployment zip builder for Lambda.
 
 ## How the request flow works
 
+### Telegram webhook (user-initiated)
+
 1. Telegram sends an update to your Lambda webhook URL.
 2. `lambda_function.py` validates the request and optional Telegram secret header.
 3. The payload is converted into a Telegram `Update` object.
 4. `fuel_price_telegram_bot/bot.py` routes the command or button action.
-5. `fuel_price_telegram_bot/scraper.py` fetches cached data or refreshes provider prices.
-6. `fuel_price_telegram_bot/formatter.py` builds the response message.
+5. `fuel_price_telegram_bot/bot.py` reads price data from S3 `current.json` via `snapshot.py` (fast, ~100 ms). Falls back to a live scrape only if S3 data is missing or older than 3 hours.
+6. `fuel_price_telegram_bot/formatter.py` builds the response message, including ▲/▼ diff indicators computed against `previous.json`.
+
+### EventBridge scheduled trigger (background)
+
+1. EventBridge fires the Lambda on your configured schedule (recommended: every 30–60 minutes).
+2. `lambda_function.py` detects scheduled invocations from EventBridge Rule and EventBridge Scheduler payloads (including `aws.events`, `aws.scheduler`, and empty no-body scheduler events) and calls `_run_scheduled_snapshot()`.
+3. All providers are scraped in parallel.
+4. Scraped prices are compared to `current.json`. If any price changed, `current.json` is rotated to `previous.json` and new data is written as `current.json` with an updated `changed_at` timestamp. If prices are unchanged only `scraped_at` is updated.
 
 ## Environment variables
 
@@ -49,6 +60,13 @@ Set these in AWS Lambda or a local `.env` file.
 | `TARGET_URL` | No | Override for the primary Circle K source URL. Defaults to the built-in Circle K page. |
 | `ENABLED_PROVIDERS` | No | Comma-separated provider list such as `circlek,neste,virsi,viada`. Defaults to all supported providers. |
 | `CREDIT_MESSAGE` | No | Custom footer/support/credit text appended to price, status, and help messages. Set to an empty string to disable it entirely. |
+| `S3_BUCKET_NAME` | No | S3 bucket name used for price snapshots. When unset the diff/change feature is disabled and the bot falls back to live scraping only. |
+| `S3_CURRENT_KEY` | No | S3 key for the current price snapshot. Defaults to `prices/current.json`. |
+| `S3_PREVIOUS_KEY` | No | S3 key for the previous price snapshot used for diff computation. Defaults to `prices/previous.json`. |
+| `SCRAPER_CACHE_TTL_SECONDS` | No | In-memory scrape cache TTL in seconds. Defaults to `1800`. |
+| `SCRAPER_CONNECT_TIMEOUT_SECONDS` | No | HTTP connect timeout for scraping requests in seconds. Defaults to `2`. |
+| `SCRAPER_READ_TIMEOUT_SECONDS` | No | HTTP read timeout for scraping requests in seconds. Defaults to `4`. |
+| `SCRAPER_MAX_WORKERS` | No | Maximum parallel scrape worker threads. Defaults to `4`. |
 
 ### Default credit message
 
@@ -65,15 +83,17 @@ TELEGRAM_TOKEN=123456:example-token
 TELEGRAM_SECRET=replace-with-random-secret
 ENABLED_PROVIDERS=circlek,neste,virsi
 CREDIT_MESSAGE=Built on DegvielaLV framework by YourProject. Support: https://example.com
+S3_BUCKET_NAME=my-fuel-bot-snapshots
 ```
 
 ## Deploy your own bot
 
 1. Create a Telegram bot with `@BotFather` and copy the token.
-2. Deploy **the Release .zip** to AWS Lambda. You can also create a release .zip locally by running ./scripts/build_lambda_zip.ps1 from repository root
-4. Configure the environment variables listed above.
-5. Expose the Lambda through a public HTTPS endpoint.
-6. Register the webhook with Telegram.
+2. Deploy **the Release .zip** to AWS Lambda. You can also create a release .zip locally by running `./scripts/build_lambda_zip.ps1` from repository root.
+3. Configure the environment variables listed above.
+4. Expose the Lambda through a public HTTPS endpoint.
+5. Register the webhook with Telegram.
+6. *(Optional but recommended)* Create an S3 bucket and an EventBridge rule that invokes the same Lambda function on a schedule (e.g. every 30 minutes) to keep snapshots fresh and enable price-change indicators.
 
 Webhook registration example:
 
@@ -95,6 +115,12 @@ Install dependencies:
 
 ```bash
 pip install -r requirements.txt
+```
+
+If you need to test S3 snapshot features locally, install AWS SDK separately:
+
+```bash
+pip install boto3
 ```
 
 Optional local `.env` example:
@@ -122,18 +148,31 @@ Create the deployment zip with:
 
 The script outputs `lambda-deployment.zip` in the repository root.
 
+Build script defaults are optimized for Lambda cold starts:
+
+- skips pip upgrade unless explicitly requested,
+- installs without bytecode compilation,
+- excludes `boto3`/`botocore` from the zip by default (Lambda runtime already includes AWS SDK).
+
+Optional flags:
+
+```powershell
+./scripts/build_lambda_zip.ps1 -IncludeBoto3 -UpgradePip
+```
+
 ## Bot capabilities
 
-- `/fuel`: full comparison for all available fuels.
+- `/fuel`: full comparison for all available fuels, with ▲/▼ price-change indicators.
 - `/fuel <type>` and `/price <type>`: cheapest provider for one fuel.
 - `/best`: cheapest provider for each fuel type.
-- `/status`: cache details and provider health.
 - `/refresh`: forces a refresh with cooldown protection.
 - `/mode`: per-chat compact/full rendering preference.
 - `/fav`: per-chat favorite fuels for faster menu access.
 - `/circlek`, `/neste`, `/virsi`, `/viada`: provider-specific price views when enabled.
+- All price views include a `📅 Mainījās:` timestamp indicating when prices last changed (requires S3 snapshot setup).
+- `/ping` and `/status` are internal diagnostics commands and are disabled in public deployments by default.
 
-Full command behavior is documented in [TELEGRAM_COMMANDS.md](TELEGRAM_COMMANDS.md).
+Full command and button behaviour is documented in [TELEGRAM_COMMANDS.md](TELEGRAM_COMMANDS.md).
 
 ## Notes for framework users
 
@@ -141,13 +180,47 @@ Full command behavior is documented in [TELEGRAM_COMMANDS.md](TELEGRAM_COMMANDS.
 - `CREDIT_MESSAGE` is deployment-specific, so forks can add their own support link or attribution without editing Python code.
 - Setting `CREDIT_MESSAGE` to an empty string removes the footer credit from formatted responses.
 - Status, fuel, best-price, and provider-specific messages all use the same configured credit value.
+- `S3_BUCKET_NAME` is optional. Without it the bot works fully but shows no ▲/▼ price-change indicators and no `📅 Mainījās:` timestamps.
+- The Lambda execution role must have bucket-level `s3:ListBucket` and object-level `s3:GetObject`/`s3:PutObject` on the configured S3 bucket/prefix when `S3_BUCKET_NAME` is set.
+
+Example IAM policy (replace bucket name/prefix as needed):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "FuelSnapshotsBucketList",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::telegram-bot-s3-snapshots",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "prices/*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "FuelSnapshotsObjectsRW",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::telegram-bot-s3-snapshots/prices/*"
+    }
+  ]
+}
+```
 
 ## Lambda responses
 
-- `200 OK`: update accepted or console test without a webhook payload.
+- `200 OK`: Telegram update accepted or scheduled snapshot completed successfully.
 - `400 Bad Request`: invalid JSON or empty request body.
 - `403 Forbidden`: webhook secret mismatch.
-- `500 Internal Server Error`: invalid token, invalid configuration, or runtime failure.
+- `500 Internal Server Error`: invalid token, invalid configuration, or scheduled snapshot failure (`body` includes a structured failure reason).
 
 ## CI and release notes
 
