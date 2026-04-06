@@ -111,8 +111,8 @@ Example: `/fav add diesel`
 | Command | Output |
 |---|---|
 | `/refresh` | Force-refresh scraped data, shows updated prices |
-| `/status` | Last update timestamp and per-provider scrape health |
-| `/ping` | Returns `✅ Darbojas.` — quick health check |
+
+Note: `/ping` and `/status` are internal diagnostics commands and are disabled for public users by default.
 
 **Refresh cooldown:** 45 seconds per chat, 20 seconds globally. Tapping 🔄 Atjaunot too quickly shows a countdown message instead of triggering a redundant scrape.
 
@@ -129,7 +129,6 @@ Example: `/fav add diesel`
 - The footer credit/support text comes from the `CREDIT_MESSAGE` environment variable.
 - If `CREDIT_MESSAGE` is unset, the built-in default support line is used.
 - If `CREDIT_MESSAGE` is set to an empty string, the footer credit is omitted.
-- `/ping` returns `✅ Darbojas.` with shortcut buttons.
 - If a provider is disabled, provider command replies are plain text without shortcut buttons.
 
 ## Error behaviour

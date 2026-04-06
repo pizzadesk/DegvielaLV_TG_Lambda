@@ -143,12 +143,12 @@ The script outputs `lambda-deployment.zip` in the repository root.
 - `/fuel`: full comparison for all available fuels, with ▲/▼ price-change indicators.
 - `/fuel <type>` and `/price <type>`: cheapest provider for one fuel.
 - `/best`: cheapest provider for each fuel type.
-- `/status`: last update time and per-provider scrape health.
 - `/refresh`: forces a refresh with cooldown protection.
 - `/mode`: per-chat compact/full rendering preference.
 - `/fav`: per-chat favorite fuels for faster menu access.
 - `/circlek`, `/neste`, `/virsi`, `/viada`: provider-specific price views when enabled.
 - All price views include a `📅 Mainījās:` timestamp indicating when prices last changed (requires S3 snapshot setup).
+- `/ping` and `/status` are internal diagnostics commands and are disabled in public deployments by default.
 
 Full command and button behaviour is documented in [TELEGRAM_COMMANDS.md](TELEGRAM_COMMANDS.md).
 
@@ -159,7 +159,39 @@ Full command and button behaviour is documented in [TELEGRAM_COMMANDS.md](TELEGR
 - Setting `CREDIT_MESSAGE` to an empty string removes the footer credit from formatted responses.
 - Status, fuel, best-price, and provider-specific messages all use the same configured credit value.
 - `S3_BUCKET_NAME` is optional. Without it the bot works fully but shows no ▲/▼ price-change indicators and no `📅 Mainījās:` timestamps.
-- The Lambda execution role must have `s3:GetObject` and `s3:PutObject` on the configured S3 bucket/prefix when `S3_BUCKET_NAME` is set.
+- The Lambda execution role must have bucket-level `s3:ListBucket` and object-level `s3:GetObject`/`s3:PutObject` on the configured S3 bucket/prefix when `S3_BUCKET_NAME` is set.
+
+Example IAM policy (replace bucket name/prefix as needed):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "FuelSnapshotsBucketList",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::telegram-bot-s3-snapshots",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "prices/*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "FuelSnapshotsObjectsRW",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::telegram-bot-s3-snapshots/prices/*"
+    }
+  ]
+}
+```
 
 ## Lambda responses
 

@@ -17,6 +17,30 @@ def _s3_client():
     return boto3.client('s3')
 
 
+def _is_missing_or_unavailable_snapshot(exc: Exception) -> bool:
+    """
+    Return True for S3 read errors that should be treated as "snapshot unavailable".
+
+    Cases:
+    - NoSuchKey when the object does not exist.
+    - AccessDenied that references s3:ListBucket, which can happen when the key
+      is missing and the role cannot list the bucket.
+    """
+    response = getattr(exc, 'response', None)
+    if not isinstance(response, dict):
+        return False
+
+    error = response.get('Error', {})
+    code = str(error.get('Code', ''))
+    message = str(error.get('Message', ''))
+
+    if code == 'NoSuchKey':
+        return True
+    if code == 'AccessDenied' and 's3:ListBucket' in message:
+        return True
+    return False
+
+
 def read_snapshot(bucket: str, key: str) -> dict | None:
     """Read and parse a JSON snapshot from S3. Returns None if missing or on any error."""
     try:
@@ -24,10 +48,8 @@ def read_snapshot(bucket: str, key: str) -> dict | None:
         response = client.get_object(Bucket=bucket, Key=key)
         return json.loads(response['Body'].read())
     except Exception as exc:
-        # botocore ClientError for a missing key — not an operational fault.
-        error_code = getattr(getattr(exc, 'response', None), '__class__', None)
-        response_attr = getattr(exc, 'response', None)
-        if isinstance(response_attr, dict) and response_attr.get('Error', {}).get('Code') == 'NoSuchKey':
+        if _is_missing_or_unavailable_snapshot(exc):
+            logger.info('Snapshot unavailable at s3://%s/%s; continuing without diff context', bucket, key)
             return None
         logger.exception('Failed to read snapshot s3://%s/%s', bucket, key)
         return None
