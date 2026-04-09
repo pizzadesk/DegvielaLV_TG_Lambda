@@ -21,7 +21,8 @@ Most bot messages include a row of inline buttons — no slash commands needed f
 ```
 ⛽ Degviela
   └─ izvēlies degvielu (95, Diesel, LPG, …)
-       └─ 💰 Lētākais      — cheapest single provider
+       └─ [selecting a fuel shows cheapest price immediately]
+          💰 Lētākais      — return to cheapest price view
           ⛽ Visas stacijas — all providers side by side
           Circle K / Neste / … — one specific provider
           ⭐ Saglabāt / Noņemt — pin this fuel to the top of the menu
@@ -37,7 +38,7 @@ Favorites appear first in the list, marked with ⭐.
 All price views show ▲/▼ indicators next to prices that have changed since the last detected price update:
 
 ```
-Diesel: Circle K €1.459 ▼ 0.010 ⭐
+Diesel: Circle K €1.459 ▼ 0.010 💰
 ```
 
 The footer shows `📅 Mainījās: šodien 09:15` — the exact time prices last changed. This feature requires the S3 snapshot setup described in README.md.
@@ -79,18 +80,6 @@ Example: `/price diesel+` and `/price dieselpremium` both return the cheapest Di
 
 ---
 
-### Display mode
-
-```
-/mode compact   — concise one-line-per-fuel view
-/mode full      — full comparison table with all providers
-/mode auto      — compact in groups/channels, full in private chat (default)
-```
-
-Preference is saved per chat and persists until changed.
-
----
-
 ### Favorites
 
 Favorites appear at the top of the Fuel Menu with a ⭐. They can also be managed from the inline button inside each fuel's action menu.
@@ -98,7 +87,7 @@ Favorites appear at the top of the Fuel Menu with a ⭐. They can also be manage
 ```
 /fav add <fuel>      — add a fuel to favorites
 /fav remove <fuel>   — remove a fuel from favorites
-/fav list            — show current favorites
+/fav list            — show current prices for all saved favorites
 /fav clear           — remove all favorites
 ```
 

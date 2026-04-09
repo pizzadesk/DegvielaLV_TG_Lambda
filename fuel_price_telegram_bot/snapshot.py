@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
-_CACHE_TTL_SECONDS = 300  # 5 minutes per warm container
+_CACHE_TTL_SECONDS = 60  # 1 minute per warm container
 
 _cached_current: dict | None = None
 _current_cache_expires_at: datetime = datetime.fromtimestamp(0, tz=timezone.utc)
@@ -161,6 +161,15 @@ def get_previous_snapshot(bucket: str, key: str) -> dict | None:
 
 
 _SNAPSHOT_MAX_AGE_SECONDS = 10800  # 3 hours — fall back to live scrape beyond this
+
+
+def invalidate_snapshot_cache() -> None:
+    """Reset both in-memory snapshot caches so the next read fetches fresh data from S3."""
+    global _cached_current, _current_cache_expires_at, _cached_previous, _previous_cache_expires_at
+    _cached_current = None
+    _current_cache_expires_at = datetime.fromtimestamp(0, tz=timezone.utc)
+    _cached_previous = None
+    _previous_cache_expires_at = datetime.fromtimestamp(0, tz=timezone.utc)
 
 
 def get_snapshot_data(
