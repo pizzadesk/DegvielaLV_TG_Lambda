@@ -88,6 +88,7 @@ _last_source_status: dict[str, dict] = {
 _HTTP_SESSION = requests.Session()
 _HTTP_SESSION.mount('http://', HTTPAdapter(pool_connections=8, pool_maxsize=8))
 _HTTP_SESSION.mount('https://', HTTPAdapter(pool_connections=8, pool_maxsize=8))
+_HTTP_SESSION.headers.update({'User-Agent': 'DegvielaLV-Bot/1.0 (+https://github.com/your-org/DegvielaLV_TG_Lambda)'})
 
 
 def get_brand_name(source: str) -> str:

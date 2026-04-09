@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
-_CACHE_TTL_SECONDS = 300  # 5 minutes per warm container
+_CACHE_TTL_SECONDS = 60  # 1 minute per warm container
 
 _cached_current: dict | None = None
 _current_cache_expires_at: datetime = datetime.fromtimestamp(0, tz=timezone.utc)

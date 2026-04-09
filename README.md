@@ -44,7 +44,7 @@ The repository is usable as-is for the included providers, but it is also struct
 
 ### EventBridge scheduled trigger (background)
 
-1. EventBridge fires the Lambda on your configured schedule (recommended: every 30–60 minutes).
+1. EventBridge fires the Lambda on your configured schedule (recommended: every 10 minutes).
 2. `lambda_function.py` detects scheduled invocations from EventBridge Rule and EventBridge Scheduler payloads (including `aws.events`, `aws.scheduler`, and empty no-body scheduler events) and calls `_run_scheduled_snapshot()`.
 3. All providers are scraped in parallel.
 4. Scraped prices are compared to `current.json`. If any price changed, `current.json` is rotated to `previous.json` and new data is written as `current.json` with an updated `changed_at` timestamp. If prices are unchanged only `scraped_at` is updated.
@@ -93,7 +93,7 @@ S3_BUCKET_NAME=my-fuel-bot-snapshots
 3. Configure the environment variables listed above.
 4. Expose the Lambda through a public HTTPS endpoint.
 5. Register the webhook with Telegram.
-6. *(Optional but recommended)* Create an S3 bucket and an EventBridge rule that invokes the same Lambda function on a schedule (e.g. every 30 minutes) to keep snapshots fresh and enable price-change indicators.
+6. *(Optional but recommended)* Create an S3 bucket and an EventBridge rule that invokes the same Lambda function on a schedule (recommended: every 10 minutes) to keep snapshots fresh and enable price-change indicators.
 
 Webhook registration example:
 
@@ -165,11 +165,10 @@ Optional flags:
 - `/fuel`: full comparison for all available fuels, with ▲/▼ price-change indicators.
 - `/fuel <type>` and `/price <type>`: cheapest provider for one fuel.
 - `/best`: cheapest provider for each fuel type.
-- `/refresh`: forces a refresh with cooldown protection.
-- `/mode`: per-chat compact/full rendering preference.
-- `/fav`: per-chat favorite fuels for faster menu access.
+- `/refresh`: forces a cache-bust and re-reads S3 data, with cooldown protection.
+- `/fav`: shows current prices for all saved favorite fuels; favorites also appear pinned with ⭐ at the top of the inline fuel menu.
 - `/circlek`, `/neste`, `/virsi`, `/viada`: provider-specific price views when enabled.
-- All price views include a `📅 Mainījās:` timestamp indicating when prices last changed (requires S3 snapshot setup).
+- All price views include a `📅 Cenas atjaunotas:` timestamp indicating when prices last changed (requires S3 snapshot setup).
 - `/ping` and `/status` are internal diagnostics commands and are disabled in public deployments by default.
 
 Full command and button behaviour is documented in [TELEGRAM_COMMANDS.md](TELEGRAM_COMMANDS.md).

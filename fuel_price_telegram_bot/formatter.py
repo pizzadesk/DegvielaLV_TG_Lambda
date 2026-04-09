@@ -88,9 +88,8 @@ def format_help_text(enabled_providers: tuple[str, ...] | list[str], credit_mess
         '/best — lētākās cenas katram degvielas veidam\n'
         '/price 95 — lētākā cena izvēlētajam degvielas veidam\n'
         f'{provider_commands} — konkrēta tirgotāja cenas\n'
-        '/fav — saglabātie degvielas veidi\n'
-        '/refresh — atjauno cenas\n'
-        '/mode compact|full — izvēlies skata režīmu'
+        '/fav — saglabāto degvielu cenas\n'
+        '/refresh — atjauno cenas'
     )
     return _append_credit(message, credit_message)
 
@@ -115,11 +114,11 @@ def _footer(
     changed_at: 'datetime | None' = None,
 ) -> str:
     source_list = sources or list(_SOURCE_HOSTS.values())
-    now = datetime.now(_DISPLAY_TIMEZONE)
-    lines = [f" Pēdējais pieprasījums: {_format_display_time(now)}"]
+    lines = []
     if changed_at is not None:
         lines.append(f"📅 Cenas atjaunotas: {_format_display_time(changed_at)}")
-    lines += ['', f"🔗 {' · '.join(source_list)}"]
+        lines.append('')
+    lines.append(f"🔗 {' · '.join(source_list)}")
     credit = _normalize_credit_message(credit_message)
     if credit:
         lines.append(credit)
@@ -143,28 +142,6 @@ def _format_display_time(value: datetime | None) -> str:
         day_label = local.strftime('%d.%m.')
 
     return f"{day_label} {local.strftime('%H:%M')}"
-
-
-def _format_cache_duration(ttl_seconds: int | None) -> str:
-    if not isinstance(ttl_seconds, int) or ttl_seconds <= 0:
-        return 'nav zināms'
-
-    if ttl_seconds < 60:
-        return 'mazāk par 1 minūti'
-
-    minutes = round(ttl_seconds / 60)
-    if minutes < 60:
-        unit = 'minūte' if minutes == 1 else 'minūtes'
-        return f'aptuveni {minutes} {unit}'
-
-    hours = minutes // 60
-    remaining_minutes = minutes % 60
-    hour_unit = 'stunda' if hours == 1 else 'stundas'
-    if remaining_minutes == 0:
-        return f'aptuveni {hours} {hour_unit}'
-
-    minute_unit = 'minūte' if remaining_minutes == 1 else 'minūtes'
-    return f'aptuveni {hours} {hour_unit} {remaining_minutes} {minute_unit}'
 
 
 def _extract_prices(item: dict, providers: tuple[str, ...] | list[str] | None = None) -> list[tuple[float, str, str, str]]:
@@ -205,43 +182,12 @@ def format_message(
         for idx, (_, name, raw_price, source) in enumerate(prices):
             diff_str = format_price_diff(diffs.get((source, fuel)) if diffs is not None else None)
             if idx == 0:
-                message += f"<b>{name}: €{raw_price}{diff_str}</b> ⭐\n"
+                message += f"<b>{name}: €{raw_price}{diff_str}</b> 💰\n"
             else:
                 message += f"{name}: €{raw_price}{diff_str}\n"
         message += "\n"
 
     message += _footer([_SOURCE_HOSTS[source] for source in active_providers], credit_message, changed_at=changed_at)
-    return message
-
-
-def format_compact_message(
-    data: list[dict],
-    enabled_providers: tuple[str, ...] | list[str] | None = None,
-    credit_message: str | None = None,
-    diffs: dict | None = None,
-    changed_at: 'datetime | None' = None,
-) -> str:
-    if not data:
-        return _append_credit('⚠️ Nevaru ielādēt cenas. Mēģini vēlreiz.', credit_message)
-
-    active_providers = list(enabled_providers or _BRAND_NAMES)
-    message = "⛽ <b>Degvielas cenas</b>\n\n"
-    found_any = False
-
-    for item in data:
-        prices = _extract_prices(item, active_providers)
-        if not prices:
-            continue
-        found_any = True
-        best = prices[0]
-        fuel = item.get('fuel', 'Nezināms')
-        diff_str = format_price_diff(diffs.get((best[3], fuel)) if diffs is not None else None)
-        message += f"<b>{fuel}</b>: {best[1]} €{best[2]}{diff_str} ⭐\n"
-
-    if not found_any:
-        return _append_credit('⚠️ Nevaru atrast cenu datus. Mēģini vēlreiz.', credit_message)
-
-    message += '\n' + _footer([_SOURCE_HOSTS[source] for source in active_providers], credit_message, changed_at=changed_at)
     return message
 
 
@@ -275,7 +221,7 @@ def format_lowest_price(
     return _append_credit(
         (
             f"⛽ <b>{fuel_key}</b> — lētākais\n\n"
-            f"<b>{best[1]}: €{best[2]}{diff_str}</b> ⭐"
+            f"<b>{best[1]}: €{best[2]}{diff_str}</b> 💰"
             f"{changed_line}"
         ).rstrip(),
         credit_message,
@@ -303,7 +249,7 @@ def format_best_prices(
         best = prices[0]
         fuel = item.get('fuel', 'Nezināms')
         diff_str = format_price_diff(diffs.get((best[3], fuel)) if diffs is not None else None)
-        message += f"<b>{fuel}</b>: {best[1]} €{best[2]}{diff_str} ⭐\n"
+        message += f"<b>{fuel}</b>: {best[1]} €{best[2]}{diff_str} 💰\n"
 
     if not found_any:
         return _append_credit('⚠️ Nevaru atrast cenu datus. Mēģini vēlreiz.', credit_message)
@@ -366,28 +312,4 @@ def format_snapshot_status(snapshot: 'dict | None', credit_message: str | None =
     message += f'📡 Pēdējais pieprasījums: {_format_display_time(scraped_at)}\n'
     message += f'📅 Cenas atjaunotas: {_format_display_time(changed_at)}\n'
     message += f'📊 Degvielas veidi: {price_count}\n'
-    return _append_credit(message.rstrip(), credit_message)
-
-
-def format_status(status: dict, credit_message: str | None = None) -> str:
-    last_refresh_at = status.get('last_refresh_at')
-    last_refresh_error = status.get('last_refresh_error')
-
-    message = 'ℹ️ <b>Bota darbības statuss</b>\n\n'
-    message += f"Pēdējais veiksmīgais atjauninājums: {_format_display_time(last_refresh_at)}\n"
-    if last_refresh_error:
-        message += f"⚠️ {last_refresh_error}\n"
-    message += '\n'
-
-    for source, source_status in status.get('sources', {}).items():
-        provider_name = source_status.get('name', get_brand_name(source))
-        if not source_status.get('enabled'):
-            message += f"{provider_name}: izslēgts\n"
-            continue
-        if source_status.get('ok'):
-            count = source_status.get('count', 0)
-            message += f"{provider_name} ✅ {count} veidi\n"
-        else:
-            message += f"{provider_name} ⚠️ Datus neizdevās ielādēt. Mēģini /refresh.\n"
-
     return _append_credit(message.rstrip(), credit_message)
